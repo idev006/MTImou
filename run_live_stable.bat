@@ -9,6 +9,8 @@ set "IMOU_RTSP_SUBTYPE=0"
 set "IMOU_NO_FRAME_RESTART_SEC=30"
 set "IMOU_BOOTSTRAP_ATTEMPTS=4"
 set "IMOU_FIRST_FRAME_TIMEOUT_SEC=15"
+set "IMOU_TUNNEL_RESTART_COOLDOWN_SEC=45"
+set "IMOU_RECOVER_BACKOFF_SEC=2.5"
 
 call "%~dp0run_stop_all.bat"
 call "%~dp0run_viewer_opencv.bat" 0

@@ -35,6 +35,19 @@ class SpikeConfig:
     max_session_sec: float
     bootstrap_attempts: int
     first_frame_timeout_sec: float
+    tunnel_restart_cooldown_sec: float
+    recover_backoff_sec: float
+
+
+@dataclass(slots=True)
+class SessionStats:
+    bootstrap_successes: int = 0
+    stall_events: int = 0
+    capture_only_recover_successes: int = 0
+    capture_only_recover_failures: int = 0
+    tunnel_restarts: int = 0
+    tunnel_restart_skips_cooldown: int = 0
+    first_frame_latency_sec: float = -1.0
 
 
 def load_config() -> SpikeConfig:
@@ -55,6 +68,8 @@ def load_config() -> SpikeConfig:
     max_session_sec = float(os.getenv("IMOU_MAX_SESSION_SEC", "0"))
     bootstrap_attempts = int(os.getenv("IMOU_BOOTSTRAP_ATTEMPTS", "4"))
     first_frame_timeout_sec = float(os.getenv("IMOU_FIRST_FRAME_TIMEOUT_SEC", "8"))
+    tunnel_restart_cooldown_sec = float(os.getenv("IMOU_TUNNEL_RESTART_COOLDOWN_SEC", "45"))
+    recover_backoff_sec = float(os.getenv("IMOU_RECOVER_BACKOFF_SEC", "2.5"))
 
     if not serial:
         raise ValueError("Missing env IMOU_CAMERA_SN")
@@ -79,6 +94,8 @@ def load_config() -> SpikeConfig:
         max_session_sec=max_session_sec,
         bootstrap_attempts=bootstrap_attempts,
         first_frame_timeout_sec=first_frame_timeout_sec,
+        tunnel_restart_cooldown_sec=tunnel_restart_cooldown_sec,
+        recover_backoff_sec=recover_backoff_sec,
     )
 
 
@@ -349,11 +366,16 @@ def main() -> None:
     tunnel: subprocess.Popen | None = None
     cap: cv2.VideoCapture | None = None
     reader: FrameReader | None = None
+    stats = SessionStats()
+    started_at = time.monotonic()
+    last_tunnel_restart_ts = 0.0
 
     while True:
         boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="bootstrap")
         if boot is not None:
             tunnel, cap, reader = boot
+            stats.bootstrap_successes += 1
+            stats.first_frame_latency_sec = time.monotonic() - started_at
             break
         print("[WARN] Bootstrap failed after retries. Waiting 5s before next round...")
         time.sleep(5.0)
@@ -384,12 +406,15 @@ def main() -> None:
                 print("[WARN] Tunnel exited. Re-bootstrap session...")
                 stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
+                last_tunnel_restart_ts = time.monotonic()
+                stats.tunnel_restarts += 1
                 boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:tunnel-exit")
                 if boot is None:
                     print("[WARN] Recover failed after tunnel exit. Sleep 5s and retry recovery.")
                     time.sleep(5.0)
                     continue
                 tunnel, cap, reader = boot
+                stats.bootstrap_successes += 1
                 last_frame = None
                 last_frame_ts = time.monotonic()
                 continue
@@ -400,17 +425,22 @@ def main() -> None:
                 rec = recover_capture_only(cfg, rtsp_url, cap, reader, phase="recover:reader-exception")
                 if rec is not None:
                     cap, reader = rec
+                    stats.capture_only_recover_successes += 1
                     last_frame = None
                     last_frame_ts = time.monotonic()
                     continue
+                stats.capture_only_recover_failures += 1
                 stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
+                last_tunnel_restart_ts = time.monotonic()
+                stats.tunnel_restarts += 1
                 boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:reader-exception")
                 if boot is None:
                     print("[WARN] Recover failed after reader exception. Sleep 5s and retry recovery.")
                     time.sleep(5.0)
                     continue
                 tunnel, cap, reader = boot
+                stats.bootstrap_successes += 1
                 last_frame = None
                 last_frame_ts = time.monotonic()
                 continue
@@ -453,20 +483,39 @@ def main() -> None:
                     "[WARN] Frame stalled, restarting capture+tunnel...",
                     f"idle={idle_sec:.1f}s",
                 )
+                stats.stall_events += 1
                 rec = recover_capture_only(cfg, rtsp_url, cap, reader, phase="recover:stalled-frame:capture-only")
                 if rec is not None:
                     cap, reader = rec
+                    stats.capture_only_recover_successes += 1
                     last_frame = None
                     last_frame_ts = time.monotonic()
                     continue
+                stats.capture_only_recover_failures += 1
+                now = time.monotonic()
+                since_tunnel_restart = now - last_tunnel_restart_ts
+                if since_tunnel_restart < cfg.tunnel_restart_cooldown_sec:
+                    wait_left = cfg.tunnel_restart_cooldown_sec - since_tunnel_restart
+                    stats.tunnel_restart_skips_cooldown += 1
+                    print(
+                        f"[WARN] Skip tunnel restart due cooldown; wait {wait_left:.1f}s, backoff..."
+                    )
+                    time.sleep(min(wait_left, cfg.recover_backoff_sec))
+                    continue
                 stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
+                last_tunnel_restart_ts = time.monotonic()
+                stats.tunnel_restarts += 1
                 boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:stalled-frame")
                 if boot is None:
-                    print("[WARN] Recover failed after stalled frame. Sleep 5s and retry recovery.")
-                    time.sleep(5.0)
+                    print(
+                        "[WARN] Recover failed after stalled frame. "
+                        f"Sleep {cfg.recover_backoff_sec:.1f}s and retry recovery."
+                    )
+                    time.sleep(cfg.recover_backoff_sec)
                     continue
                 tunnel, cap, reader = boot
+                stats.bootstrap_successes += 1
                 last_frame = None
                 last_frame_ts = time.monotonic()
                 continue
@@ -512,6 +561,18 @@ def main() -> None:
                 print("[INFO] Max session reached, stopping.")
                 return
     finally:
+        total_sec = time.monotonic() - started_at
+        print(
+            "[SUMMARY]",
+            f"uptime_sec={total_sec:.1f}",
+            f"first_frame_sec={stats.first_frame_latency_sec:.1f}",
+            f"bootstrap_successes={stats.bootstrap_successes}",
+            f"stall_events={stats.stall_events}",
+            f"capture_recover_ok={stats.capture_only_recover_successes}",
+            f"capture_recover_fail={stats.capture_only_recover_failures}",
+            f"tunnel_restarts={stats.tunnel_restarts}",
+            f"restart_cooldown_skips={stats.tunnel_restart_skips_cooldown}",
+        )
         try:
             stop_reader_and_release(reader, cap)
         except Exception:
