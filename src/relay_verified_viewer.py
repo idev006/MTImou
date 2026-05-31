@@ -192,6 +192,26 @@ def run_ffplay(ffplay: Path, selected_url: str) -> int:
     return subprocess.call(ffplay_cmd)
 
 
+def verify_with_ffplay(ffplay: Path, url: str) -> bool:
+    if not ffplay.exists():
+        print(f"[ERROR] ffplay not found: {ffplay}")
+        return False
+    test_sec = env("IMOU_FFPLAY_VERIFY_SEC", "6")
+    cmd = [
+        str(ffplay),
+        "-v",
+        "warning",
+        "-rtsp_transport",
+        "tcp",
+        "-t",
+        test_sec,
+        "-autoexit",
+        "-nodisp",
+        url,
+    ]
+    return subprocess.call(cmd) == 0
+
+
 def main() -> int:
     enforce_venv_python()
     print(f"[INFO] Runtime python: {sys.executable}")
@@ -265,7 +285,11 @@ def main() -> int:
         for url in urls:
             masked = url.replace(pwd, "***")
             print("[INFO] Probe URL:", masked)
-            if can_read_frames(url, seconds=probe_wait_sec):
+            if viewer_mode == "ffplay":
+                if verify_with_ffplay(ffplay, url):
+                    selected_url = url
+                    break
+            elif can_read_frames(url, seconds=probe_wait_sec):
                 selected_url = url
                 break
 
