@@ -170,12 +170,24 @@ class FrameReader:
         self.read_failures = 0
         self.total_frames = 0
         self.last_ok_ts = time.monotonic()
+        self.last_exception: str | None = None
         self.thread = Thread(target=self._run, daemon=True)
         self.thread.start()
 
     def _run(self) -> None:
         while not self.stop_event.is_set():
-            ok, frame = self.cap.read()
+            try:
+                ok, frame = self.cap.read()
+            except cv2.error as exc:
+                self.read_failures += 1
+                self.last_exception = f"cv2.error: {exc}"
+                time.sleep(0.1)
+                continue
+            except Exception as exc:
+                self.read_failures += 1
+                self.last_exception = f"{type(exc).__name__}: {exc}"
+                time.sleep(0.1)
+                continue
             if not ok:
                 self.read_failures += 1
                 time.sleep(0.05)
@@ -197,9 +209,23 @@ class FrameReader:
         except Empty:
             return None
 
-    def stop(self) -> None:
+    def stop(self, timeout_sec: float = 12.0) -> bool:
         self.stop_event.set()
-        self.thread.join(timeout=1.0)
+        self.thread.join(timeout=timeout_sec)
+        return not self.thread.is_alive()
+
+
+def stop_reader_and_release(reader: FrameReader | None, cap: cv2.VideoCapture | None) -> None:
+    stopped = True
+    if reader is not None:
+        stopped = reader.stop(timeout_sec=12.0)
+        if not stopped:
+            print("[WARN] FrameReader thread did not stop in time; skip cap.release() to avoid decoder crash.")
+    if cap is not None and stopped:
+        try:
+            cap.release()
+        except Exception as exc:
+            print(f"[WARN] cap.release() failed: {exc}")
 
 
 def _pump_lines(proc: subprocess.Popen, q: Queue) -> None:
@@ -274,8 +300,7 @@ def main() -> None:
         reader = FrameReader(cap)
         if not wait_first_frame(reader, cfg.first_frame_timeout_sec):
             print("[WARN] No first frame yet, restarting bootstrap...")
-            reader.stop()
-            cap.release()
+            stop_reader_and_release(reader, cap)
             stop_process(tunnel)
             reader = None
             cap = None
@@ -315,7 +340,7 @@ def main() -> None:
 
             if tunnel.poll() is not None:
                 print("[WARN] Tunnel exited. Restarting...")
-                reader.stop()
+                stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
                 tunnel = start_tunnel(cfg, repo_dir)
                 ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
@@ -325,9 +350,29 @@ def main() -> None:
                         "Tunnel restart failed to become ready.\n"
                         f"Recent tunnel log:\n{tail}"
                     )
-                cap.release()
                 cap = open_capture(rtsp_url)
                 reader = FrameReader(cap)
+                last_frame_ts = time.monotonic()
+                continue
+
+            if reader.last_exception:
+                print(f"[WARN] Reader exception detected, restarting capture+tunnel... {reader.last_exception}")
+                reader.last_exception = None
+                stop_reader_and_release(reader, cap)
+                stop_process(tunnel)
+                tunnel = start_tunnel(cfg, repo_dir)
+                ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
+                if not ready:
+                    tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
+                    raise RuntimeError(
+                        "Tunnel restart failed after reader exception.\n"
+                        f"Recent tunnel log:\n{tail}"
+                    )
+                cap = open_capture(rtsp_url)
+                if not cap.isOpened():
+                    raise RuntimeError("Cannot reopen RTSP after reader exception restart.")
+                reader = FrameReader(cap)
+                last_frame = None
                 last_frame_ts = time.monotonic()
                 continue
 
@@ -369,8 +414,7 @@ def main() -> None:
                     "[WARN] Frame stalled, restarting capture+tunnel...",
                     f"idle={idle_sec:.1f}s",
                 )
-                reader.stop()
-                cap.release()
+                stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
                 tunnel = start_tunnel(cfg, repo_dir)
                 ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
@@ -430,12 +474,9 @@ def main() -> None:
                 return
     finally:
         try:
-            if reader is not None:
-                reader.stop()
+            stop_reader_and_release(reader, cap)
         except Exception:
             pass
-        if cap is not None:
-            cap.release()
         if not cfg.headless:
             cv2.destroyAllWindows()
         stop_process(tunnel)
