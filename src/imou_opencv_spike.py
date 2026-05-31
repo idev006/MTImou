@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Event, Thread
 from queue import Queue, Empty
+from typing import Any
 
 import cv2
 import numpy as np
@@ -37,6 +38,8 @@ class SpikeConfig:
     first_frame_timeout_sec: float
     tunnel_restart_cooldown_sec: float
     recover_backoff_sec: float
+    ffmpeg_bin_dir: str
+    capture_backend: str
 
 
 @dataclass(slots=True)
@@ -48,6 +51,9 @@ class SessionStats:
     tunnel_restarts: int = 0
     tunnel_restart_skips_cooldown: int = 0
     first_frame_latency_sec: float = -1.0
+
+
+CaptureLike = Any
 
 
 def load_config() -> SpikeConfig:
@@ -70,6 +76,8 @@ def load_config() -> SpikeConfig:
     first_frame_timeout_sec = float(os.getenv("IMOU_FIRST_FRAME_TIMEOUT_SEC", "8"))
     tunnel_restart_cooldown_sec = float(os.getenv("IMOU_TUNNEL_RESTART_COOLDOWN_SEC", "45"))
     recover_backoff_sec = float(os.getenv("IMOU_RECOVER_BACKOFF_SEC", "2.5"))
+    ffmpeg_bin_dir = os.getenv("FFMPEG_BIN_DIR", r"F:\ffmpeg\bin").strip()
+    capture_backend = os.getenv("IMOU_CAPTURE_BACKEND", "ffmpeg_pipe").strip().lower()
 
     if not serial:
         raise ValueError("Missing env IMOU_CAMERA_SN")
@@ -96,6 +104,8 @@ def load_config() -> SpikeConfig:
         first_frame_timeout_sec=first_frame_timeout_sec,
         tunnel_restart_cooldown_sec=tunnel_restart_cooldown_sec,
         recover_backoff_sec=recover_backoff_sec,
+        ffmpeg_bin_dir=ffmpeg_bin_dir,
+        capture_backend=capture_backend,
     )
 
 
@@ -187,7 +197,141 @@ def stop_process(proc: subprocess.Popen | None) -> None:
             pass
 
 
-def open_capture(url: str) -> cv2.VideoCapture:
+class FFmpegPipeCapture:
+    def __init__(self, url: str, ffmpeg_path: Path) -> None:
+        self.url = url
+        self.ffmpeg_path = ffmpeg_path
+        self.stop_event = Event()
+        self.frames: Queue[np.ndarray] = Queue(maxsize=2)
+        self.last_error: str | None = None
+        self.proc: subprocess.Popen | None = None
+        self.reader_thread: Thread | None = None
+        self.stderr_thread: Thread | None = None
+        self._opened = False
+        self._start()
+
+    def _start(self) -> None:
+        analyzeduration = os.getenv("IMOU_FFPIPE_ANALYZEDURATION", "1000000").strip()
+        probesize = os.getenv("IMOU_FFPIPE_PROBESIZE", "1000000").strip()
+        rw_timeout_us = os.getenv("IMOU_RTSP_FFMPEG_RW_TIMEOUT_US", "2000000").strip()
+        cmd = [
+            str(self.ffmpeg_path),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-rtsp_transport",
+            "tcp",
+            "-rw_timeout",
+            rw_timeout_us,
+            "-analyzeduration",
+            analyzeduration,
+            "-probesize",
+            probesize,
+            "-fflags",
+            "nobuffer",
+            "-flags",
+            "low_delay",
+            "-i",
+            self.url,
+            "-f",
+            "image2pipe",
+            "-vcodec",
+            "mjpeg",
+            "-q:v",
+            "5",
+            "pipe:1",
+        ]
+        self.proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+        )
+        self.reader_thread = Thread(target=self._pump_stdout, daemon=True)
+        self.stderr_thread = Thread(target=self._pump_stderr, daemon=True)
+        self.reader_thread.start()
+        self.stderr_thread.start()
+
+    def _pump_stderr(self) -> None:
+        assert self.proc is not None
+        assert self.proc.stderr is not None
+        for raw in self.proc.stderr:
+            if self.stop_event.is_set():
+                break
+            line = raw.decode("utf-8", errors="replace").strip()
+            if line:
+                self.last_error = line
+
+    def _pump_stdout(self) -> None:
+        assert self.proc is not None
+        assert self.proc.stdout is not None
+        buf = bytearray()
+        while not self.stop_event.is_set():
+            chunk = self.proc.stdout.read(4096)
+            if not chunk:
+                break
+            buf.extend(chunk)
+            while True:
+                start = buf.find(b"\xff\xd8")
+                if start < 0:
+                    if len(buf) > 1024 * 1024:
+                        del buf[:-2]
+                    break
+                end = buf.find(b"\xff\xd9", start + 2)
+                if end < 0:
+                    if start > 0:
+                        del buf[:start]
+                    break
+                jpg = bytes(buf[start : end + 2])
+                del buf[: end + 2]
+                arr = np.frombuffer(jpg, dtype=np.uint8)
+                frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                if frame is None:
+                    continue
+                self._opened = True
+                if self.frames.full():
+                    try:
+                        self.frames.get_nowait()
+                    except Empty:
+                        pass
+                self.frames.put(frame)
+
+    def isOpened(self) -> bool:
+        return self.proc is not None and self.proc.poll() is None
+
+    def read(self) -> tuple[bool, np.ndarray | None]:
+        try:
+            frame = self.frames.get(timeout=0.5)
+            return True, frame
+        except Empty:
+            if self.proc is not None and self.proc.poll() is not None and self.last_error:
+                raise RuntimeError(f"ffmpeg exited: {self.last_error}")
+            return False, None
+
+    def release(self) -> None:
+        self.stop_event.set()
+        if self.proc is not None and self.proc.poll() is None:
+            try:
+                self.proc.terminate()
+                self.proc.wait(timeout=3)
+            except Exception:
+                try:
+                    self.proc.kill()
+                except Exception:
+                    pass
+        if self.reader_thread is not None:
+            self.reader_thread.join(timeout=1)
+        if self.stderr_thread is not None:
+            self.stderr_thread.join(timeout=1)
+
+
+def open_capture(cfg: SpikeConfig, url: str):
+    if cfg.capture_backend == "ffmpeg_pipe":
+        ffmpeg = Path(cfg.ffmpeg_bin_dir) / "ffmpeg.exe"
+        if ffmpeg.exists():
+            return FFmpegPipeCapture(url, ffmpeg)
+        print(f"[WARN] ffmpeg not found for ffmpeg_pipe backend: {ffmpeg}. Falling back to OpenCV.")
     ff_timeout_us = os.getenv("IMOU_RTSP_FFMPEG_TIMEOUT_US", "5000000").strip()
     ff_rw_timeout_us = os.getenv("IMOU_RTSP_FFMPEG_RW_TIMEOUT_US", ff_timeout_us).strip()
     ff_max_delay_us = os.getenv("IMOU_RTSP_FFMPEG_MAX_DELAY_US", "500000").strip()
@@ -211,7 +355,7 @@ def open_capture(url: str) -> cv2.VideoCapture:
 
 
 class FrameReader:
-    def __init__(self, cap: cv2.VideoCapture) -> None:
+    def __init__(self, cap: CaptureLike) -> None:
         self.cap = cap
         self.stop_event = Event()
         self.queue: Queue = Queue(maxsize=1)
@@ -267,12 +411,12 @@ def try_open_reader_timed(
     cfg: SpikeConfig,
     rtsp_url: str,
     timeout_sec: float,
-) -> tuple[cv2.VideoCapture | None, FrameReader | None, str | None]:
+) -> tuple[CaptureLike | None, FrameReader | None, str | None]:
     result: dict[str, object] = {"cap": None, "reader": None, "err": None}
     done = Event()
 
     def worker() -> None:
-        cap = open_capture(rtsp_url)
+        cap = open_capture(cfg, rtsp_url)
         if not cap.isOpened():
             try:
                 cap.release()
@@ -296,13 +440,13 @@ def try_open_reader_timed(
     if not done.wait(timeout=timeout_sec):
         return None, None, "worker_timeout"
     return (
-        result["cap"] if isinstance(result["cap"], cv2.VideoCapture) else None,
+        result["cap"] if result["cap"] is not None else None,
         result["reader"] if isinstance(result["reader"], FrameReader) else None,
         result["err"] if isinstance(result["err"], str) else None,
     )
 
 
-def stop_reader_and_release(reader: FrameReader | None, cap: cv2.VideoCapture | None) -> None:
+def stop_reader_and_release(reader: FrameReader | None, cap: CaptureLike | None) -> None:
     stopped = True
     if reader is not None:
         stopped = reader.stop(timeout_sec=12.0)
@@ -356,7 +500,7 @@ def bootstrap_session(
     repo_dir: Path,
     rtsp_urls: list[str],
     phase: str = "bootstrap",
-) -> tuple[subprocess.Popen, cv2.VideoCapture, FrameReader] | None:
+) -> tuple[subprocess.Popen, CaptureLike, FrameReader] | None:
     for attempt in range(1, cfg.bootstrap_attempts + 1):
         print(f"[INFO] {phase} attempt {attempt}/{cfg.bootstrap_attempts}")
         print("[INFO] Starting tunnel process...")
@@ -402,10 +546,10 @@ def bootstrap_session(
 def recover_capture_only(
     cfg: SpikeConfig,
     rtsp_urls: list[str],
-    cap: cv2.VideoCapture | None,
+    cap: CaptureLike | None,
     reader: FrameReader | None,
     phase: str = "recover:capture-only",
-) -> tuple[cv2.VideoCapture, FrameReader] | None:
+) -> tuple[CaptureLike, FrameReader] | None:
     saw_worker_timeout = False
     for attempt in range(1, 3):
         print(f"[INFO] {phase} attempt {attempt}/2")
@@ -442,7 +586,7 @@ def main() -> None:
 
     rtsp_urls = build_rtsp_urls(cfg)
     tunnel: subprocess.Popen | None = None
-    cap: cv2.VideoCapture | None = None
+    cap: CaptureLike | None = None
     reader: FrameReader | None = None
     stats = SessionStats()
     started_at = time.monotonic()
