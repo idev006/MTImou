@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual env
+.venv/
+venv/
+
+# Secrets / local env
+camera.env.bat
+*.env
+
+# Logs and runtime artifacts
+logs/
+*.log
+ffprobe_out.log
+ffprobe_err.log
+rust_out.log
+rust_err.log
+rust_run.log
+
+# Build/cache
+*.zip
+*.exe
+*.dll
+*.pdb
+*.obj
+*.lib
+*.class
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
