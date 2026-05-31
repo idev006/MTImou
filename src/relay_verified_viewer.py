@@ -189,7 +189,13 @@ def run_ffplay(ffplay: Path, selected_url: str) -> int:
     if autoexit_sec:
         ffplay_cmd.extend(["-t", autoexit_sec, "-autoexit"])
     ffplay_cmd.append(selected_url)
-    return subprocess.call(ffplay_cmd)
+    proc = subprocess.Popen(
+        ffplay_cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+    return proc.wait()
 
 
 def verify_with_ffplay(ffplay: Path, url: str) -> bool:
@@ -209,7 +215,13 @@ def verify_with_ffplay(ffplay: Path, url: str) -> bool:
         "-nodisp",
         url,
     ]
-    return subprocess.call(cmd) == 0
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+    return proc.wait() == 0
 
 
 def main() -> int:
