@@ -33,8 +33,9 @@ class ViewerConfig:
     try_channel_zero: bool
     use_ffprobe_precheck: bool
     tunnel_warmup_sec: float
-    ffplay_rw_timeout_us: str
+    ffplay_timeout_us: str
     transports: list[str]
+    ffplay_test_seconds: str
 
 
 def load_config() -> ViewerConfig:
@@ -57,11 +58,12 @@ def load_config() -> ViewerConfig:
     try_channel_zero = os.getenv("IMOU_TRY_CHANNEL0", "1").strip() == "1"
     use_ffprobe_precheck = os.getenv("IMOU_USE_FFPROBE_PRECHECK", "0").strip() == "1"
     tunnel_warmup_sec = float(os.getenv("IMOU_TUNNEL_WARMUP_SEC", "1.2"))
-    ffplay_rw_timeout_us = os.getenv("IMOU_FFPLAY_RW_TIMEOUT_US", "12000000").strip()
+    ffplay_timeout_us = os.getenv("IMOU_FFPLAY_TIMEOUT_US", "").strip()
     transport_env = os.getenv("IMOU_RTSP_TRANSPORTS", "tcp,udp").strip().lower()
     transports = [t.strip() for t in transport_env.split(",") if t.strip() in {"tcp", "udp"}]
     if not transports:
         transports = ["tcp"]
+    ffplay_test_seconds = os.getenv("IMOU_FFPLAY_TEST_SECONDS", "").strip()
 
     if force_subtype1:
         subtype = "1"
@@ -91,8 +93,9 @@ def load_config() -> ViewerConfig:
         try_channel_zero=try_channel_zero,
         use_ffprobe_precheck=use_ffprobe_precheck,
         tunnel_warmup_sec=tunnel_warmup_sec,
-        ffplay_rw_timeout_us=ffplay_rw_timeout_us,
+        ffplay_timeout_us=ffplay_timeout_us,
         transports=transports,
+        ffplay_test_seconds=ffplay_test_seconds,
     )
 
 
@@ -193,6 +196,47 @@ def start_tunnel(cfg: ViewerConfig, repo_dir: Path) -> subprocess.Popen:
     )
 
 
+def find_listening_pid_on_port(port: int) -> int | None:
+    if os.name != "nt":
+        return None
+    cmd = f'netstat -ano | findstr /R /C:":{port} .*LISTENING"'
+    p = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+    if p.returncode != 0 or not p.stdout.strip():
+        return None
+    for line in p.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 5:
+            try:
+                return int(parts[-1])
+            except ValueError:
+                continue
+    return None
+
+
+def ensure_rtsp_port_free(port: int, allow_kill: bool = True) -> None:
+    pid = find_listening_pid_on_port(port)
+    if pid is None:
+        return
+    if not allow_kill:
+        raise RuntimeError(
+            f"RTSP local port {port} is already in use by PID {pid}. "
+            "Set IMOU_KILL_PORT_554=1 or stop that process first."
+        )
+    print(f"[WARN] Port {port} is busy by PID {pid}; terminating it...")
+    subprocess.run(
+        f"taskkill /PID {pid} /T /F >nul 2>&1",
+        shell=True,
+        capture_output=True,
+        text=True,
+    )
+    time.sleep(0.5)
+    pid2 = find_listening_pid_on_port(port)
+    if pid2 is not None:
+        raise RuntimeError(
+            f"Port {port} is still busy by PID {pid2} after cleanup."
+        )
+
+
 def stop_process(proc: subprocess.Popen | None) -> None:
     if proc is None or proc.poll() is not None:
         return
@@ -258,6 +302,8 @@ def main() -> int:
         f"(force_subtype1={cfg.force_subtype1}, strict_subtype={cfg.strict_subtype})"
     )
     print("[INFO] Tunnel python:", os.getenv("IMOU_TUNNEL_PYTHON_EXE", sys.executable))
+    allow_kill = os.getenv("IMOU_KILL_PORT_554", "1").strip() == "1"
+    ensure_rtsp_port_free(554, allow_kill=allow_kill)
     if cfg.use_ffprobe_precheck and ffprobe.exists():
         filtered: list[str] = []
         for url in candidate_urls:
@@ -297,15 +343,17 @@ def main() -> int:
                 "warning",
                 "-rtsp_transport",
                 transport,
-                "-rw_timeout",
-                cfg.ffplay_rw_timeout_us,
                 "-analyzeduration",
                 cfg.ffplay_analyzeduration,
                 "-probesize",
                 cfg.ffplay_probesize,
             ]
+            if cfg.ffplay_timeout_us:
+                cmd.extend(["-timeout", cfg.ffplay_timeout_us])
             if cfg.ffplay_low_latency:
                 cmd.extend(["-fflags", "nobuffer", "-flags", "low_delay"])
+            if cfg.ffplay_test_seconds:
+                cmd.extend(["-t", cfg.ffplay_test_seconds])
             cmd.append(selected_url)
 
             started = time.monotonic()
@@ -324,6 +372,8 @@ def main() -> int:
                 if (
                     "Invalid data found when processing input" in line
                     or ("CSeq" in line and "expected" in line)
+                    or "Option rw_timeout not found" in line
+                    or "Option timeout not found" in line
                 ):
                     bad_rtsp = True
 
@@ -334,6 +384,11 @@ def main() -> int:
             if bad_rtsp and elapsed < 8:
                 print(
                     "[WARN] ffplay session failed quickly with RTSP sequence/data error; trying next candidate..."
+                )
+                continue
+            if rc == 0 and elapsed < 2:
+                print(
+                    "[WARN] ffplay exited too quickly; trying next candidate..."
                 )
                 continue
             return rc
