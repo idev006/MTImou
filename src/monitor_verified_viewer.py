@@ -15,6 +15,7 @@ class Config:
     subtype: str
     autoexit_sec: str
     verify_sec: str
+    per_run_timeout_sec: int
     logs_dir: Path
     repo_root: Path
 
@@ -26,8 +27,9 @@ def load_config() -> Config:
     subtype = os.getenv("IMOU_RTSP_SUBTYPE", "0").strip() or "0"
     autoexit_sec = os.getenv("IMOU_FFPLAY_AUTOEXIT_SEC", "15").strip() or "15"
     verify_sec = os.getenv("IMOU_FFPLAY_VERIFY_SEC", "5").strip() or "5"
+    per_run_timeout_sec = int(os.getenv("IMOU_MONITOR_PER_RUN_TIMEOUT_SEC", "150"))
     logs_dir = Path(os.getenv("IMOU_MONITOR_LOGS_DIR", str(repo_root / "logs"))).resolve()
-    return Config(runs, interval_sec, subtype, autoexit_sec, verify_sec, logs_dir, repo_root)
+    return Config(runs, interval_sec, subtype, autoexit_sec, verify_sec, per_run_timeout_sec, logs_dir, repo_root)
 
 
 def main() -> int:
@@ -47,6 +49,7 @@ def main() -> int:
             env["IMOU_VERIFIED_VIEWER"] = "ffplay"
             env["IMOU_FFPLAY_AUTOEXIT_SEC"] = cfg.autoexit_sec
             env["IMOU_FFPLAY_VERIFY_SEC"] = cfg.verify_sec
+            env["IMOU_SKIP_PROBE_ON_FFPLAY"] = "1"
 
             start = time.monotonic()
             cmd = ["cmd", "/c", f"run_viewer_verified.bat {cfg.subtype}"]
@@ -61,7 +64,14 @@ def main() -> int:
                     stderr=subprocess.STDOUT,
                     text=True,
                 )
-                rc = proc.wait()
+                try:
+                    rc = proc.wait(timeout=cfg.per_run_timeout_sec)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    rc = 124
+                    runf.write(
+                        f"\n[MONITOR] Timeout after {cfg.per_run_timeout_sec}s; process killed.\n"
+                    )
 
             elapsed = time.monotonic() - start
             text = run_log.read_text(encoding="utf-8", errors="replace")
@@ -92,4 +102,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
