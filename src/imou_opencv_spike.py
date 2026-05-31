@@ -188,12 +188,23 @@ def stop_process(proc: subprocess.Popen | None) -> None:
 
 
 def open_capture(url: str) -> cv2.VideoCapture:
-    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+    ff_timeout_us = os.getenv("IMOU_RTSP_FFMPEG_TIMEOUT_US", "5000000").strip()
+    ff_rw_timeout_us = os.getenv("IMOU_RTSP_FFMPEG_RW_TIMEOUT_US", ff_timeout_us).strip()
+    ff_max_delay_us = os.getenv("IMOU_RTSP_FFMPEG_MAX_DELAY_US", "500000").strip()
+    ff_opts = [
+        "rtsp_transport;tcp",
+        f"timeout;{ff_timeout_us}",
+        f"rw_timeout;{ff_rw_timeout_us}",
+        f"max_delay;{ff_max_delay_us}",
+    ]
+    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "|".join(ff_opts)
     cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
     try:
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 10000)
-        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 10000)
+        open_timeout_ms = int(os.getenv("IMOU_CAPTURE_OPEN_TIMEOUT_MS", "6000"))
+        read_timeout_ms = int(os.getenv("IMOU_CAPTURE_READ_TIMEOUT_MS", "6000"))
+        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, open_timeout_ms)
+        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, read_timeout_ms)
     except Exception:
         pass
     return cap
