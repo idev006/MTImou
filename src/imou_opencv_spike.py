@@ -264,6 +264,50 @@ def wait_first_frame(reader: FrameReader, timeout_sec: float) -> bool:
     return False
 
 
+def bootstrap_session(
+    cfg: SpikeConfig,
+    repo_dir: Path,
+    rtsp_url: str,
+    phase: str = "bootstrap",
+) -> tuple[subprocess.Popen, cv2.VideoCapture, FrameReader] | None:
+    for attempt in range(1, cfg.bootstrap_attempts + 1):
+        print(f"[INFO] {phase} attempt {attempt}/{cfg.bootstrap_attempts}")
+        print("[INFO] Starting tunnel process...")
+        tunnel = start_tunnel(cfg, repo_dir)
+        ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
+        if not ready:
+            stop_process(tunnel)
+            tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
+            print(
+                f"[WARN] Tunnel not ready in {phase} attempt.\n"
+                f"Recent tunnel log:\n{tail}"
+            )
+            time.sleep(1.0)
+            continue
+
+        print("[INFO] Opening RTSP:", rtsp_url.replace(cfg.password, "***"))
+        cap = open_capture(rtsp_url)
+        if not cap.isOpened():
+            print(f"[WARN] RTSP open failed in {phase} attempt, retrying...")
+            cap.release()
+            stop_process(tunnel)
+            time.sleep(1.0)
+            continue
+
+        reader = FrameReader(cap)
+        if not wait_first_frame(reader, cfg.first_frame_timeout_sec):
+            print(f"[WARN] No first frame yet in {phase} attempt, retrying...")
+            stop_reader_and_release(reader, cap)
+            stop_process(tunnel)
+            time.sleep(1.0)
+            continue
+
+        print(f"[INFO] {phase} success.")
+        return tunnel, cap, reader
+
+    return None
+
+
 def main() -> None:
     cfg = load_config()
     repo_dir = Path(os.getenv("DH_P2P_REPO_DIR", "")).resolve()
@@ -275,46 +319,13 @@ def main() -> None:
     cap: cv2.VideoCapture | None = None
     reader: FrameReader | None = None
 
-    for attempt in range(1, cfg.bootstrap_attempts + 1):
-        print(f"[INFO] Bootstrap attempt {attempt}/{cfg.bootstrap_attempts}")
-        print("[INFO] Starting tunnel process...")
-        tunnel = start_tunnel(cfg, repo_dir)
-        ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
-        if not ready:
-            stop_process(tunnel)
-            tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
-            print(
-                "[WARN] Tunnel not ready in bootstrap attempt.\n"
-                f"Recent tunnel log:\n{tail}"
-            )
-            continue
-
-        print("[INFO] Opening RTSP:", rtsp_url.replace(cfg.password, "***"))
-        cap = open_capture(rtsp_url)
-        if not cap.isOpened():
-            print("[WARN] RTSP open failed on this tunnel, retrying...")
-            cap.release()
-            stop_process(tunnel)
-            continue
-
-        reader = FrameReader(cap)
-        if not wait_first_frame(reader, cfg.first_frame_timeout_sec):
-            print("[WARN] No first frame yet, restarting bootstrap...")
-            stop_reader_and_release(reader, cap)
-            stop_process(tunnel)
-            reader = None
-            cap = None
-            tunnel = None
-            continue
-        break
-    else:
-        raise RuntimeError(
-            "Failed to bootstrap stream after retries. "
-            "Relay session established but no decodable frame arrived."
-        )
-    assert tunnel is not None
-    assert cap is not None
-    assert reader is not None
+    while True:
+        boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="bootstrap")
+        if boot is not None:
+            tunnel, cap, reader = boot
+            break
+        print("[WARN] Bootstrap failed after retries. Waiting 5s before next round...")
+        time.sleep(5.0)
 
     print("[INFO] Stream connected. Press 'q' to exit.")
     print(
@@ -339,19 +350,16 @@ def main() -> None:
                     break
 
             if tunnel.poll() is not None:
-                print("[WARN] Tunnel exited. Restarting...")
+                print("[WARN] Tunnel exited. Re-bootstrap session...")
                 stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
-                tunnel = start_tunnel(cfg, repo_dir)
-                ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
-                if not ready:
-                    tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
-                    raise RuntimeError(
-                        "Tunnel restart failed to become ready.\n"
-                        f"Recent tunnel log:\n{tail}"
-                    )
-                cap = open_capture(rtsp_url)
-                reader = FrameReader(cap)
+                boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:tunnel-exit")
+                if boot is None:
+                    print("[WARN] Recover failed after tunnel exit. Sleep 5s and retry recovery.")
+                    time.sleep(5.0)
+                    continue
+                tunnel, cap, reader = boot
+                last_frame = None
                 last_frame_ts = time.monotonic()
                 continue
 
@@ -360,18 +368,12 @@ def main() -> None:
                 reader.last_exception = None
                 stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
-                tunnel = start_tunnel(cfg, repo_dir)
-                ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
-                if not ready:
-                    tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
-                    raise RuntimeError(
-                        "Tunnel restart failed after reader exception.\n"
-                        f"Recent tunnel log:\n{tail}"
-                    )
-                cap = open_capture(rtsp_url)
-                if not cap.isOpened():
-                    raise RuntimeError("Cannot reopen RTSP after reader exception restart.")
-                reader = FrameReader(cap)
+                boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:reader-exception")
+                if boot is None:
+                    print("[WARN] Recover failed after reader exception. Sleep 5s and retry recovery.")
+                    time.sleep(5.0)
+                    continue
+                tunnel, cap, reader = boot
                 last_frame = None
                 last_frame_ts = time.monotonic()
                 continue
@@ -416,18 +418,12 @@ def main() -> None:
                 )
                 stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
-                tunnel = start_tunnel(cfg, repo_dir)
-                ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
-                if not ready:
-                    tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
-                    raise RuntimeError(
-                        "Tunnel restart failed after read errors.\n"
-                        f"Recent tunnel log:\n{tail}"
-                    )
-                cap = open_capture(rtsp_url)
-                if not cap.isOpened():
-                    raise RuntimeError("Cannot reopen RTSP after tunnel restart.")
-                reader = FrameReader(cap)
+                boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:stalled-frame")
+                if boot is None:
+                    print("[WARN] Recover failed after stalled frame. Sleep 5s and retry recovery.")
+                    time.sleep(5.0)
+                    continue
+                tunnel, cap, reader = boot
                 last_frame = None
                 last_frame_ts = time.monotonic()
                 continue

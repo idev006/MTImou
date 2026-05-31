@@ -22,10 +22,20 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":554 .*LISTENING"') do
 )
 
 if exist "camera.env.bat" (
-  call "camera.env.bat"
+  if not "%IMOU_CAMERA_SN%"=="" (
+    echo [INFO] Existing IMOU_* env found, skip camera.env.bat
+  ) else (
+    call "camera.env.bat"
+  )
 ) else (
   echo [INFO] camera.env.bat not found. Using existing environment variables.
 )
+
+REM Optional overrides from args:
+REM   run_viewer_opencv.bat 1      -> subtype=1
+REM   run_viewer_opencv.bat 0 0    -> subtype=0 channel=0
+if not "%~1"=="" set "IMOU_RTSP_SUBTYPE=%~1"
+if not "%~2"=="" set "IMOU_RTSP_CHANNEL=%~2"
 
 if "%DH_P2P_REPO_DIR%"=="" set "DH_P2P_REPO_DIR=%~dp0dh-p2p"
 if "%IMOU_CAMERA_USERNAME%"=="" set "IMOU_CAMERA_USERNAME=admin"
