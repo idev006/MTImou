@@ -18,6 +18,15 @@ if not exist "%PYTHON_EXE%" (
 set "IMOU_REQUIRED_PYTHON=%PYTHON_EXE%"
 set "IMOU_TUNNEL_PYTHON_EXE=%PYTHON_EXE%"
 
+rem Preflight: ensure venv python is actually runnable (not broken launcher)
+"%PYTHON_EXE%" -c "import sys; print(sys.executable)" >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] .venv python is not runnable: %PYTHON_EXE%
+  echo [ERROR] This venv likely points to a missing base Python install.
+  echo [ERROR] Recreate venv with Python 3.12, then reinstall dependencies.
+  exit /b 101
+)
+
 if exist "camera.env.bat" (
   call "camera.env.bat"
 )
