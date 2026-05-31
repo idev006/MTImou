@@ -31,6 +31,8 @@ class ViewerConfig:
     force_subtype1: bool
     ffplay_low_latency: bool
     try_channel_zero: bool
+    use_ffprobe_precheck: bool
+    tunnel_warmup_sec: float
 
 
 def load_config() -> ViewerConfig:
@@ -51,6 +53,8 @@ def load_config() -> ViewerConfig:
     force_subtype1 = os.getenv("IMOU_FORCE_SUBTYPE1", "1").strip() == "1"
     ffplay_low_latency = os.getenv("IMOU_FFPLAY_LOW_LATENCY", "0").strip() == "1"
     try_channel_zero = os.getenv("IMOU_TRY_CHANNEL0", "1").strip() == "1"
+    use_ffprobe_precheck = os.getenv("IMOU_USE_FFPROBE_PRECHECK", "0").strip() == "1"
+    tunnel_warmup_sec = float(os.getenv("IMOU_TUNNEL_WARMUP_SEC", "1.2"))
 
     if force_subtype1:
         subtype = "1"
@@ -78,6 +82,8 @@ def load_config() -> ViewerConfig:
         force_subtype1=force_subtype1,
         ffplay_low_latency=ffplay_low_latency,
         try_channel_zero=try_channel_zero,
+        use_ffprobe_precheck=use_ffprobe_precheck,
+        tunnel_warmup_sec=tunnel_warmup_sec,
     )
 
 
@@ -241,31 +247,36 @@ def main() -> int:
         f"[INFO] Effective subtype={cfg.subtype} "
         f"(force_subtype1={cfg.force_subtype1}, strict_subtype={cfg.strict_subtype})"
     )
-    print("[INFO] Starting tunnel...")
-    tunnel = start_tunnel(cfg, repo_dir)
-    ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
-    if not ready:
-        stop_process(tunnel)
-        tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
-        raise RuntimeError(
-            "Tunnel not ready (did not reach 'Ready to connect').\n"
-            f"Recent tunnel log:\n{tail}"
-        )
-
-    selected_url = rtsp_url
-    if ffprobe.exists():
+    if cfg.use_ffprobe_precheck and ffprobe.exists():
+        filtered: list[str] = []
         for url in candidate_urls:
             masked_probe = url.replace(cfg.password, "***")
             print("[INFO] Probe URL:", masked_probe)
             if has_video_stream(ffprobe, url):
-                selected_url = url
-                break
+                filtered.append(url)
+        if filtered:
+            candidate_urls = filtered
+    else:
+        print("[INFO] ffprobe precheck disabled (IMOU_USE_FFPROBE_PRECHECK=0)")
 
-    masked = selected_url.replace(cfg.password, "***")
-    print("[INFO] Launching ffplay:", masked)
-    print("[INFO] Close ffplay window or press q in ffplay to stop.")
+    for idx, selected_url in enumerate(candidate_urls, start=1):
+        print(f"[INFO] Starting tunnel (candidate {idx}/{len(candidate_urls)})...")
+        tunnel = start_tunnel(cfg, repo_dir)
+        ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
+        if not ready:
+            stop_process(tunnel)
+            tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
+            print(
+                "[WARN] Tunnel not ready in this candidate.\n"
+                f"Recent tunnel log:\n{tail}"
+            )
+            continue
 
-    try:
+        time.sleep(cfg.tunnel_warmup_sec)
+        masked = selected_url.replace(cfg.password, "***")
+        print("[INFO] Launching ffplay:", masked)
+        print("[INFO] Close ffplay window or press q in ffplay to stop.")
+
         cmd = [
             str(ffplay),
             "-loglevel",
@@ -280,9 +291,37 @@ def main() -> int:
         if cfg.ffplay_low_latency:
             cmd.extend(["-fflags", "nobuffer", "-flags", "low_delay"])
         cmd.append(selected_url)
-        return subprocess.call(cmd)
-    finally:
+
+        started = time.monotonic()
+        bad_rtsp = False
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            line = line.rstrip("\r\n")
+            print("[FFPLAY]", line)
+            if (
+                "Invalid data found when processing input" in line
+                or ("CSeq" in line and "expected" in line)
+            ):
+                bad_rtsp = True
+
+        rc = proc.wait()
+        elapsed = time.monotonic() - started
         stop_process(tunnel)
+
+        if bad_rtsp and elapsed < 8:
+            print("[WARN] ffplay session failed quickly with RTSP sequence/data error; trying next candidate...")
+            continue
+        return rc
+
+    print("[ERROR] All RTSP candidates failed.")
+    return 1
 
 
 if __name__ == "__main__":
