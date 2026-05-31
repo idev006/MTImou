@@ -28,7 +28,7 @@ if "%DH_P2P_REPO_DIR%"=="" set "DH_P2P_REPO_DIR=%~dp0dh-p2p"
 if "%IMOU_CAMERA_USERNAME%"=="" set "IMOU_CAMERA_USERNAME=admin"
 if "%IMOU_CAMERA_TYPE%"=="" set "IMOU_CAMERA_TYPE=1"
 if "%IMOU_FORCE_RELAY%"=="" set "IMOU_FORCE_RELAY=1"
-if "%IMOU_RTSP_SUBTYPE%"=="" set "IMOU_RTSP_SUBTYPE=0"
+if "%IMOU_RTSP_SUBTYPE%"=="" set "IMOU_RTSP_SUBTYPE=1"
 if "%IMOU_RTSP_HOST%"=="" set "IMOU_RTSP_HOST=127.0.0.1"
 if "%IMOU_RTSP_PORT%"=="" set "IMOU_RTSP_PORT=554"
 if "%IMOU_RTSP_CHANNEL%"=="" set "IMOU_RTSP_CHANNEL=1"
@@ -47,4 +47,3 @@ echo [INFO] Starting ffplay viewer...
 set "RC=%ERRORLEVEL%"
 echo [INFO] Exit code: %RC%
 exit /b %RC%
-
