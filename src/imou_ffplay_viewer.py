@@ -27,6 +27,7 @@ class ViewerConfig:
     ffmpeg_bin_dir: str
     ffplay_analyzeduration: str
     ffplay_probesize: str
+    strict_subtype: bool
 
 
 def load_config() -> ViewerConfig:
@@ -43,6 +44,7 @@ def load_config() -> ViewerConfig:
     ffmpeg_bin_dir = os.getenv("FFMPEG_BIN_DIR", r"F:\ffmpeg\bin").strip()
     ffplay_analyzeduration = os.getenv("IMOU_FFPLAY_ANALYZEDURATION", "2000000").strip()
     ffplay_probesize = os.getenv("IMOU_FFPLAY_PROBESIZE", "1000000").strip()
+    strict_subtype = os.getenv("IMOU_STRICT_SUBTYPE", "1").strip() == "1"
 
     if not serial:
         raise ValueError("Missing env IMOU_CAMERA_SN")
@@ -63,6 +65,7 @@ def load_config() -> ViewerConfig:
         ffmpeg_bin_dir=ffmpeg_bin_dir,
         ffplay_analyzeduration=ffplay_analyzeduration,
         ffplay_probesize=ffplay_probesize,
+        strict_subtype=strict_subtype,
     )
 
 
@@ -78,7 +81,10 @@ def build_candidate_urls(cfg: ViewerConfig) -> list[str]:
     password = quote(cfg.password, safe="")
     subtype_order = ["0", "1"]
     if cfg.subtype in {"0", "1"}:
-        subtype_order = [cfg.subtype, "1" if cfg.subtype == "0" else "0"]
+        if cfg.strict_subtype:
+            subtype_order = [cfg.subtype]
+        else:
+            subtype_order = [cfg.subtype, "1" if cfg.subtype == "0" else "0"]
     # Prefer sub stream (often H.264) to improve decoder compatibility.
     subtype_order = sorted(set(subtype_order), key=lambda s: 0 if s == "1" else 1)
     urls: list[str] = []
@@ -100,16 +106,33 @@ def has_video_stream(ffprobe: Path, url: str, timeout_sec: int = 10) -> bool:
         "-i",
         url,
         "-show_streams",
+        "-show_entries",
+        "stream=codec_name,width,height",
         "-select_streams",
         "v:0",
         "-of",
-        "compact",
+        "default=noprint_wrappers=1:nokey=0",
     ]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
     except subprocess.TimeoutExpired:
         return False
-    return p.returncode == 0 and bool(p.stdout.strip())
+    if p.returncode != 0 or not p.stdout.strip():
+        return False
+    width = 0
+    height = 0
+    for line in p.stdout.splitlines():
+        if line.startswith("width="):
+            try:
+                width = int(line.split("=", 1)[1].strip())
+            except ValueError:
+                width = 0
+        elif line.startswith("height="):
+            try:
+                height = int(line.split("=", 1)[1].strip())
+            except ValueError:
+                height = 0
+    return width > 0 and height > 0
 
 
 def start_tunnel(cfg: ViewerConfig, repo_dir: Path) -> subprocess.Popen:
