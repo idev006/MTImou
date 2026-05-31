@@ -263,6 +263,45 @@ class FrameReader:
         return not self.thread.is_alive()
 
 
+def try_open_reader_timed(
+    cfg: SpikeConfig,
+    rtsp_url: str,
+    timeout_sec: float,
+) -> tuple[cv2.VideoCapture | None, FrameReader | None, str | None]:
+    result: dict[str, object] = {"cap": None, "reader": None, "err": None}
+    done = Event()
+
+    def worker() -> None:
+        cap = open_capture(rtsp_url)
+        if not cap.isOpened():
+            try:
+                cap.release()
+            except Exception:
+                pass
+            result["err"] = "open_failed"
+            done.set()
+            return
+        reader = FrameReader(cap)
+        if not wait_first_frame(reader, cfg.first_frame_timeout_sec):
+            stop_reader_and_release(reader, cap)
+            result["err"] = "first_frame_timeout"
+            done.set()
+            return
+        result["cap"] = cap
+        result["reader"] = reader
+        done.set()
+
+    t = Thread(target=worker, daemon=True)
+    t.start()
+    if not done.wait(timeout=timeout_sec):
+        return None, None, "worker_timeout"
+    return (
+        result["cap"] if isinstance(result["cap"], cv2.VideoCapture) else None,
+        result["reader"] if isinstance(result["reader"], FrameReader) else None,
+        result["err"] if isinstance(result["err"], str) else None,
+    )
+
+
 def stop_reader_and_release(reader: FrameReader | None, cap: cv2.VideoCapture | None) -> None:
     stopped = True
     if reader is not None:
@@ -338,19 +377,16 @@ def bootstrap_session(
         opened = False
         for rtsp_url in rtsp_urls:
             print("[INFO] Opening RTSP:", rtsp_url.replace(cfg.password, "***"))
-            cap = open_capture(rtsp_url)
-            if not cap.isOpened():
-                print(f"[WARN] RTSP open failed on this subtype in {phase} attempt")
-                cap.release()
+            cap, reader, err = try_open_reader_timed(
+                cfg,
+                rtsp_url,
+                timeout_sec=max(cfg.first_frame_timeout_sec + 3.0, 8.0),
+            )
+            if cap is None or reader is None:
+                print(f"[WARN] RTSP open failed on this subtype in {phase} attempt ({err})")
                 continue
-            reader = FrameReader(cap)
-            if wait_first_frame(reader, cfg.first_frame_timeout_sec):
-                opened = True
-                break
-            print(f"[WARN] No first frame on this subtype in {phase} attempt")
-            stop_reader_and_release(reader, cap)
-            cap = None
-            reader = None
+            opened = True
+            break
 
         if not opened or cap is None or reader is None:
             stop_process(tunnel)
@@ -375,15 +411,13 @@ def recover_capture_only(
         stop_reader_and_release(reader, cap)
         for rtsp_url in rtsp_urls:
             print("[INFO] Reopen RTSP:", rtsp_url.replace(cfg.password, "***"))
-            cap2 = open_capture(rtsp_url)
-            if not cap2.isOpened():
-                print(f"[WARN] RTSP open failed in {phase} attempt")
-                cap2.release()
-                continue
-            reader2 = FrameReader(cap2)
-            if not wait_first_frame(reader2, min(cfg.first_frame_timeout_sec, 6.0)):
-                print(f"[WARN] No first frame in {phase} attempt")
-                stop_reader_and_release(reader2, cap2)
+            cap2, reader2, err = try_open_reader_timed(
+                cfg,
+                rtsp_url,
+                timeout_sec=max(min(cfg.first_frame_timeout_sec, 6.0) + 2.0, 6.0),
+            )
+            if cap2 is None or reader2 is None:
+                print(f"[WARN] Reopen failed in {phase} attempt ({err})")
                 continue
             print(f"[INFO] {phase} success.")
             return cap2, reader2
