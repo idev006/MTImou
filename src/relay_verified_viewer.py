@@ -282,10 +282,15 @@ def main() -> int:
             continue
 
         selected_url: str | None = None
+        skip_probe_ffplay = as_bool(env("IMOU_SKIP_PROBE_ON_FFPLAY", "1"))
         for url in urls:
             masked = url.replace(pwd, "***")
             print("[INFO] Probe URL:", masked)
             if viewer_mode == "ffplay":
+                if skip_probe_ffplay:
+                    print("[INFO] ffplay mode: skip pre-probe and use this URL directly")
+                    selected_url = url
+                    break
                 if verify_with_ffplay(ffplay, url):
                     selected_url = url
                     break
