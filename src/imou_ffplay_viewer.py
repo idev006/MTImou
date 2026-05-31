@@ -33,6 +33,7 @@ class ViewerConfig:
     try_channel_zero: bool
     use_ffprobe_precheck: bool
     tunnel_warmup_sec: float
+    ffplay_rw_timeout_us: str
 
 
 def load_config() -> ViewerConfig:
@@ -55,6 +56,7 @@ def load_config() -> ViewerConfig:
     try_channel_zero = os.getenv("IMOU_TRY_CHANNEL0", "1").strip() == "1"
     use_ffprobe_precheck = os.getenv("IMOU_USE_FFPROBE_PRECHECK", "0").strip() == "1"
     tunnel_warmup_sec = float(os.getenv("IMOU_TUNNEL_WARMUP_SEC", "1.2"))
+    ffplay_rw_timeout_us = os.getenv("IMOU_FFPLAY_RW_TIMEOUT_US", "12000000").strip()
 
     if force_subtype1:
         subtype = "1"
@@ -84,6 +86,7 @@ def load_config() -> ViewerConfig:
         try_channel_zero=try_channel_zero,
         use_ffprobe_precheck=use_ffprobe_precheck,
         tunnel_warmup_sec=tunnel_warmup_sec,
+        ffplay_rw_timeout_us=ffplay_rw_timeout_us,
     )
 
 
@@ -283,6 +286,8 @@ def main() -> int:
             "warning",
             "-rtsp_transport",
             "tcp",
+            "-rw_timeout",
+            cfg.ffplay_rw_timeout_us,
             "-analyzeduration",
             cfg.ffplay_analyzeduration,
             "-probesize",
