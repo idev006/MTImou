@@ -111,6 +111,24 @@ def build_rtsp_url(cfg: SpikeConfig) -> str:
     )
 
 
+def build_rtsp_urls(cfg: SpikeConfig) -> list[str]:
+    preferred = cfg.subtype if cfg.subtype in {"0", "1"} else "0"
+    other = "1" if preferred == "0" else "0"
+    urls: list[str] = []
+    for subtype in [preferred, other]:
+        if cfg.include_rtsp_auth:
+            urls.append(
+                f"rtsp://{cfg.username}:{cfg.password}@{cfg.rtsp_host}:{cfg.rtsp_port}"
+                f"/cam/realmonitor?channel={cfg.rtsp_channel}&subtype={subtype}"
+            )
+        else:
+            urls.append(
+                f"rtsp://{cfg.rtsp_host}:{cfg.rtsp_port}"
+                f"/cam/realmonitor?channel={cfg.rtsp_channel}&subtype={subtype}"
+            )
+    return urls
+
+
 def start_tunnel(cfg: SpikeConfig, repo_dir: Path) -> subprocess.Popen:
     main_py = repo_dir / "main.py"
     if not main_py.exists():
@@ -286,7 +304,7 @@ def wait_first_frame(reader: FrameReader, timeout_sec: float) -> bool:
 def bootstrap_session(
     cfg: SpikeConfig,
     repo_dir: Path,
-    rtsp_url: str,
+    rtsp_urls: list[str],
     phase: str = "bootstrap",
 ) -> tuple[subprocess.Popen, cv2.VideoCapture, FrameReader] | None:
     for attempt in range(1, cfg.bootstrap_attempts + 1):
@@ -304,19 +322,26 @@ def bootstrap_session(
             time.sleep(1.0)
             continue
 
-        print("[INFO] Opening RTSP:", rtsp_url.replace(cfg.password, "***"))
-        cap = open_capture(rtsp_url)
-        if not cap.isOpened():
-            print(f"[WARN] RTSP open failed in {phase} attempt, retrying...")
-            cap.release()
-            stop_process(tunnel)
-            time.sleep(1.0)
-            continue
-
-        reader = FrameReader(cap)
-        if not wait_first_frame(reader, cfg.first_frame_timeout_sec):
-            print(f"[WARN] No first frame yet in {phase} attempt, retrying...")
+        cap = None
+        reader = None
+        opened = False
+        for rtsp_url in rtsp_urls:
+            print("[INFO] Opening RTSP:", rtsp_url.replace(cfg.password, "***"))
+            cap = open_capture(rtsp_url)
+            if not cap.isOpened():
+                print(f"[WARN] RTSP open failed on this subtype in {phase} attempt")
+                cap.release()
+                continue
+            reader = FrameReader(cap)
+            if wait_first_frame(reader, cfg.first_frame_timeout_sec):
+                opened = True
+                break
+            print(f"[WARN] No first frame on this subtype in {phase} attempt")
             stop_reader_and_release(reader, cap)
+            cap = None
+            reader = None
+
+        if not opened or cap is None or reader is None:
             stop_process(tunnel)
             time.sleep(1.0)
             continue
@@ -329,7 +354,7 @@ def bootstrap_session(
 
 def recover_capture_only(
     cfg: SpikeConfig,
-    rtsp_url: str,
+    rtsp_urls: list[str],
     cap: cv2.VideoCapture | None,
     reader: FrameReader | None,
     phase: str = "recover:capture-only",
@@ -337,20 +362,21 @@ def recover_capture_only(
     for attempt in range(1, 3):
         print(f"[INFO] {phase} attempt {attempt}/2")
         stop_reader_and_release(reader, cap)
-        cap2 = open_capture(rtsp_url)
-        if not cap2.isOpened():
-            print(f"[WARN] RTSP open failed in {phase} attempt")
-            cap2.release()
-            time.sleep(0.6)
-            continue
-        reader2 = FrameReader(cap2)
-        if not wait_first_frame(reader2, min(cfg.first_frame_timeout_sec, 6.0)):
-            print(f"[WARN] No first frame in {phase} attempt")
-            stop_reader_and_release(reader2, cap2)
-            time.sleep(0.6)
-            continue
-        print(f"[INFO] {phase} success.")
-        return cap2, reader2
+        for rtsp_url in rtsp_urls:
+            print("[INFO] Reopen RTSP:", rtsp_url.replace(cfg.password, "***"))
+            cap2 = open_capture(rtsp_url)
+            if not cap2.isOpened():
+                print(f"[WARN] RTSP open failed in {phase} attempt")
+                cap2.release()
+                continue
+            reader2 = FrameReader(cap2)
+            if not wait_first_frame(reader2, min(cfg.first_frame_timeout_sec, 6.0)):
+                print(f"[WARN] No first frame in {phase} attempt")
+                stop_reader_and_release(reader2, cap2)
+                continue
+            print(f"[INFO] {phase} success.")
+            return cap2, reader2
+        time.sleep(0.6)
     return None
 
 
@@ -362,7 +388,7 @@ def main() -> None:
     if not str(repo_dir) or str(repo_dir) == ".":
         raise ValueError("Missing env DH_P2P_REPO_DIR")
 
-    rtsp_url = build_rtsp_url(cfg)
+    rtsp_urls = build_rtsp_urls(cfg)
     tunnel: subprocess.Popen | None = None
     cap: cv2.VideoCapture | None = None
     reader: FrameReader | None = None
@@ -371,7 +397,7 @@ def main() -> None:
     last_tunnel_restart_ts = 0.0
 
     while True:
-        boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="bootstrap")
+        boot = bootstrap_session(cfg, repo_dir, rtsp_urls, phase="bootstrap")
         if boot is not None:
             tunnel, cap, reader = boot
             stats.bootstrap_successes += 1
@@ -408,7 +434,7 @@ def main() -> None:
                 stop_process(tunnel)
                 last_tunnel_restart_ts = time.monotonic()
                 stats.tunnel_restarts += 1
-                boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:tunnel-exit")
+                boot = bootstrap_session(cfg, repo_dir, rtsp_urls, phase="recover:tunnel-exit")
                 if boot is None:
                     print("[WARN] Recover failed after tunnel exit. Sleep 5s and retry recovery.")
                     time.sleep(5.0)
@@ -422,7 +448,7 @@ def main() -> None:
             if reader.last_exception:
                 print(f"[WARN] Reader exception detected, restarting capture+tunnel... {reader.last_exception}")
                 reader.last_exception = None
-                rec = recover_capture_only(cfg, rtsp_url, cap, reader, phase="recover:reader-exception")
+                rec = recover_capture_only(cfg, rtsp_urls, cap, reader, phase="recover:reader-exception")
                 if rec is not None:
                     cap, reader = rec
                     stats.capture_only_recover_successes += 1
@@ -434,7 +460,7 @@ def main() -> None:
                 stop_process(tunnel)
                 last_tunnel_restart_ts = time.monotonic()
                 stats.tunnel_restarts += 1
-                boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:reader-exception")
+                boot = bootstrap_session(cfg, repo_dir, rtsp_urls, phase="recover:reader-exception")
                 if boot is None:
                     print("[WARN] Recover failed after reader exception. Sleep 5s and retry recovery.")
                     time.sleep(5.0)
@@ -484,7 +510,7 @@ def main() -> None:
                     f"idle={idle_sec:.1f}s",
                 )
                 stats.stall_events += 1
-                rec = recover_capture_only(cfg, rtsp_url, cap, reader, phase="recover:stalled-frame:capture-only")
+                rec = recover_capture_only(cfg, rtsp_urls, cap, reader, phase="recover:stalled-frame:capture-only")
                 if rec is not None:
                     cap, reader = rec
                     stats.capture_only_recover_successes += 1
@@ -506,7 +532,7 @@ def main() -> None:
                 stop_process(tunnel)
                 last_tunnel_restart_ts = time.monotonic()
                 stats.tunnel_restarts += 1
-                boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:stalled-frame")
+                boot = bootstrap_session(cfg, repo_dir, rtsp_urls, phase="recover:stalled-frame")
                 if boot is None:
                     print(
                         "[WARN] Recover failed after stalled frame. "
