@@ -310,6 +310,33 @@ def bootstrap_session(
     return None
 
 
+def recover_capture_only(
+    cfg: SpikeConfig,
+    rtsp_url: str,
+    cap: cv2.VideoCapture | None,
+    reader: FrameReader | None,
+    phase: str = "recover:capture-only",
+) -> tuple[cv2.VideoCapture, FrameReader] | None:
+    for attempt in range(1, 3):
+        print(f"[INFO] {phase} attempt {attempt}/2")
+        stop_reader_and_release(reader, cap)
+        cap2 = open_capture(rtsp_url)
+        if not cap2.isOpened():
+            print(f"[WARN] RTSP open failed in {phase} attempt")
+            cap2.release()
+            time.sleep(0.6)
+            continue
+        reader2 = FrameReader(cap2)
+        if not wait_first_frame(reader2, min(cfg.first_frame_timeout_sec, 6.0)):
+            print(f"[WARN] No first frame in {phase} attempt")
+            stop_reader_and_release(reader2, cap2)
+            time.sleep(0.6)
+            continue
+        print(f"[INFO] {phase} success.")
+        return cap2, reader2
+    return None
+
+
 def main() -> None:
     enforce_venv_python()
     print(f"[INFO] Runtime python: {sys.executable}")
@@ -370,6 +397,12 @@ def main() -> None:
             if reader.last_exception:
                 print(f"[WARN] Reader exception detected, restarting capture+tunnel... {reader.last_exception}")
                 reader.last_exception = None
+                rec = recover_capture_only(cfg, rtsp_url, cap, reader, phase="recover:reader-exception")
+                if rec is not None:
+                    cap, reader = rec
+                    last_frame = None
+                    last_frame_ts = time.monotonic()
+                    continue
                 stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
                 boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:reader-exception")
@@ -420,6 +453,12 @@ def main() -> None:
                     "[WARN] Frame stalled, restarting capture+tunnel...",
                     f"idle={idle_sec:.1f}s",
                 )
+                rec = recover_capture_only(cfg, rtsp_url, cap, reader, phase="recover:stalled-frame:capture-only")
+                if rec is not None:
+                    cap, reader = rec
+                    last_frame = None
+                    last_frame_ts = time.monotonic()
+                    continue
                 stop_reader_and_release(reader, cap)
                 stop_process(tunnel)
                 boot = bootstrap_session(cfg, repo_dir, rtsp_url, phase="recover:stalled-frame")
