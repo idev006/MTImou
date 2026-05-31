@@ -34,6 +34,7 @@ class ViewerConfig:
     use_ffprobe_precheck: bool
     tunnel_warmup_sec: float
     ffplay_rw_timeout_us: str
+    transports: list[str]
 
 
 def load_config() -> ViewerConfig:
@@ -57,6 +58,10 @@ def load_config() -> ViewerConfig:
     use_ffprobe_precheck = os.getenv("IMOU_USE_FFPROBE_PRECHECK", "0").strip() == "1"
     tunnel_warmup_sec = float(os.getenv("IMOU_TUNNEL_WARMUP_SEC", "1.2"))
     ffplay_rw_timeout_us = os.getenv("IMOU_FFPLAY_RW_TIMEOUT_US", "12000000").strip()
+    transport_env = os.getenv("IMOU_RTSP_TRANSPORTS", "tcp,udp").strip().lower()
+    transports = [t.strip() for t in transport_env.split(",") if t.strip() in {"tcp", "udp"}]
+    if not transports:
+        transports = ["tcp"]
 
     if force_subtype1:
         subtype = "1"
@@ -87,6 +92,7 @@ def load_config() -> ViewerConfig:
         use_ffprobe_precheck=use_ffprobe_precheck,
         tunnel_warmup_sec=tunnel_warmup_sec,
         ffplay_rw_timeout_us=ffplay_rw_timeout_us,
+        transports=transports,
     )
 
 
@@ -264,68 +270,73 @@ def main() -> int:
     else:
         print("[INFO] ffprobe precheck disabled (IMOU_USE_FFPROBE_PRECHECK=0)")
 
-    for idx, selected_url in enumerate(candidate_urls, start=1):
-        print(f"[INFO] Starting tunnel (candidate {idx}/{len(candidate_urls)})...")
-        tunnel = start_tunnel(cfg, repo_dir)
-        ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
-        if not ready:
-            stop_process(tunnel)
-            tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
+    for transport in cfg.transports:
+        for idx, selected_url in enumerate(candidate_urls, start=1):
             print(
-                "[WARN] Tunnel not ready in this candidate.\n"
-                f"Recent tunnel log:\n{tail}"
+                f"[INFO] Starting tunnel (transport={transport}, candidate {idx}/{len(candidate_urls)})..."
             )
-            continue
+            tunnel = start_tunnel(cfg, repo_dir)
+            ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
+            if not ready:
+                stop_process(tunnel)
+                tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
+                print(
+                    "[WARN] Tunnel not ready in this candidate.\n"
+                    f"Recent tunnel log:\n{tail}"
+                )
+                continue
 
-        time.sleep(cfg.tunnel_warmup_sec)
-        masked = selected_url.replace(cfg.password, "***")
-        print("[INFO] Launching ffplay:", masked)
-        print("[INFO] Close ffplay window or press q in ffplay to stop.")
+            time.sleep(cfg.tunnel_warmup_sec)
+            masked = selected_url.replace(cfg.password, "***")
+            print("[INFO] Launching ffplay:", masked)
+            print("[INFO] Close ffplay window or press q in ffplay to stop.")
 
-        cmd = [
-            str(ffplay),
-            "-loglevel",
-            "warning",
-            "-rtsp_transport",
-            "tcp",
-            "-rw_timeout",
-            cfg.ffplay_rw_timeout_us,
-            "-analyzeduration",
-            cfg.ffplay_analyzeduration,
-            "-probesize",
-            cfg.ffplay_probesize,
-        ]
-        if cfg.ffplay_low_latency:
-            cmd.extend(["-fflags", "nobuffer", "-flags", "low_delay"])
-        cmd.append(selected_url)
+            cmd = [
+                str(ffplay),
+                "-loglevel",
+                "warning",
+                "-rtsp_transport",
+                transport,
+                "-rw_timeout",
+                cfg.ffplay_rw_timeout_us,
+                "-analyzeduration",
+                cfg.ffplay_analyzeduration,
+                "-probesize",
+                cfg.ffplay_probesize,
+            ]
+            if cfg.ffplay_low_latency:
+                cmd.extend(["-fflags", "nobuffer", "-flags", "low_delay"])
+            cmd.append(selected_url)
 
-        started = time.monotonic()
-        bad_rtsp = False
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            line = line.rstrip("\r\n")
-            print("[FFPLAY]", line)
-            if (
-                "Invalid data found when processing input" in line
-                or ("CSeq" in line and "expected" in line)
-            ):
-                bad_rtsp = True
+            started = time.monotonic()
+            bad_rtsp = False
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                line = line.rstrip("\r\n")
+                print("[FFPLAY]", line)
+                if (
+                    "Invalid data found when processing input" in line
+                    or ("CSeq" in line and "expected" in line)
+                ):
+                    bad_rtsp = True
 
-        rc = proc.wait()
-        elapsed = time.monotonic() - started
-        stop_process(tunnel)
+            rc = proc.wait()
+            elapsed = time.monotonic() - started
+            stop_process(tunnel)
 
-        if bad_rtsp and elapsed < 8:
-            print("[WARN] ffplay session failed quickly with RTSP sequence/data error; trying next candidate...")
-            continue
-        return rc
+            if bad_rtsp and elapsed < 8:
+                print(
+                    "[WARN] ffplay session failed quickly with RTSP sequence/data error; trying next candidate..."
+                )
+                continue
+            return rc
 
     print("[ERROR] All RTSP candidates failed.")
     return 1
