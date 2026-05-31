@@ -166,7 +166,8 @@ def start_tunnel(cfg: ViewerConfig, repo_dir: Path) -> subprocess.Popen:
     if not main_py.exists():
         raise FileNotFoundError(f"Tunnel script not found: {main_py}")
 
-    cmd = [sys.executable, "-u", str(main_py)]
+    tunnel_python = os.getenv("IMOU_TUNNEL_PYTHON_EXE", "").strip() or sys.executable
+    cmd = [tunnel_python, "-u", str(main_py)]
     if cfg.force_relay:
         cmd.append("-r")
     cmd.extend(["-t", cfg.camera_type, "-u", cfg.username, "-p", cfg.password, cfg.serial])
@@ -250,6 +251,7 @@ def main() -> int:
         f"[INFO] Effective subtype={cfg.subtype} "
         f"(force_subtype1={cfg.force_subtype1}, strict_subtype={cfg.strict_subtype})"
     )
+    print("[INFO] Tunnel python:", os.getenv("IMOU_TUNNEL_PYTHON_EXE", sys.executable))
     if cfg.use_ffprobe_precheck and ffprobe.exists():
         filtered: list[str] = []
         for url in candidate_urls:
