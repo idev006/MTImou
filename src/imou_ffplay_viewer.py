@@ -11,6 +11,8 @@ from queue import Empty, Queue
 from threading import Thread
 from urllib.parse import quote
 
+from venv_guard import enforce_venv_python
+
 
 @dataclass(slots=True)
 class ViewerConfig:
@@ -285,6 +287,7 @@ def wait_tunnel_ready(proc: subprocess.Popen, wait_sec: float) -> tuple[bool, li
 
 
 def main() -> int:
+    enforce_venv_python()
     cfg = load_config()
     repo_dir = Path(os.getenv("DH_P2P_REPO_DIR", "")).resolve()
     if not str(repo_dir) or str(repo_dir) == ".":

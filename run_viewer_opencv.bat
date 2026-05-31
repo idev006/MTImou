@@ -14,6 +14,7 @@ if not exist "%PYTHON_EXE%" (
   echo [ERROR] Missing python exe: %PYTHON_EXE%
   exit /b 1
 )
+set "IMOU_REQUIRED_PYTHON=%PYTHON_EXE%"
 
 REM Free RTSP port 554 if a previous run is still holding it.
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":554 .*LISTENING"') do (
@@ -38,6 +39,7 @@ if not "%~1"=="" set "IMOU_RTSP_SUBTYPE=%~1"
 if not "%~2"=="" set "IMOU_RTSP_CHANNEL=%~2"
 
 if "%DH_P2P_REPO_DIR%"=="" set "DH_P2P_REPO_DIR=%~dp0dh-p2p"
+set "IMOU_TUNNEL_PYTHON_EXE=%PYTHON_EXE%"
 if "%IMOU_CAMERA_USERNAME%"=="" set "IMOU_CAMERA_USERNAME=admin"
 if "%IMOU_CAMERA_TYPE%"=="" set "IMOU_CAMERA_TYPE=1"
 if "%IMOU_FORCE_RELAY%"=="" set "IMOU_FORCE_RELAY=1"

@@ -13,6 +13,8 @@ from queue import Queue, Empty
 import cv2
 import numpy as np
 
+from venv_guard import enforce_venv_python
+
 
 @dataclass(slots=True)
 class SpikeConfig:
@@ -309,6 +311,7 @@ def bootstrap_session(
 
 
 def main() -> None:
+    enforce_venv_python()
     cfg = load_config()
     repo_dir = Path(os.getenv("DH_P2P_REPO_DIR", "")).resolve()
     if not str(repo_dir) or str(repo_dir) == ".":
