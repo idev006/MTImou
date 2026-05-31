@@ -29,6 +29,8 @@ class ViewerConfig:
     ffplay_probesize: str
     strict_subtype: bool
     force_subtype1: bool
+    ffplay_low_latency: bool
+    try_channel_zero: bool
 
 
 def load_config() -> ViewerConfig:
@@ -47,6 +49,8 @@ def load_config() -> ViewerConfig:
     ffplay_probesize = os.getenv("IMOU_FFPLAY_PROBESIZE", "1000000").strip()
     strict_subtype = os.getenv("IMOU_STRICT_SUBTYPE", "1").strip() == "1"
     force_subtype1 = os.getenv("IMOU_FORCE_SUBTYPE1", "1").strip() == "1"
+    ffplay_low_latency = os.getenv("IMOU_FFPLAY_LOW_LATENCY", "0").strip() == "1"
+    try_channel_zero = os.getenv("IMOU_TRY_CHANNEL0", "1").strip() == "1"
 
     if force_subtype1:
         subtype = "1"
@@ -72,6 +76,8 @@ def load_config() -> ViewerConfig:
         ffplay_probesize=ffplay_probesize,
         strict_subtype=strict_subtype,
         force_subtype1=force_subtype1,
+        ffplay_low_latency=ffplay_low_latency,
+        try_channel_zero=try_channel_zero,
     )
 
 
@@ -93,12 +99,17 @@ def build_candidate_urls(cfg: ViewerConfig) -> list[str]:
             subtype_order = [cfg.subtype, "1" if cfg.subtype == "0" else "0"]
     # Prefer sub stream (often H.264) to improve decoder compatibility.
     subtype_order = sorted(set(subtype_order), key=lambda s: 0 if s == "1" else 1)
+    channels = [cfg.rtsp_channel]
+    if cfg.try_channel_zero and cfg.rtsp_channel != "0":
+        channels.append("0")
+
     urls: list[str] = []
     for subtype in subtype_order:
-        urls.append(
-            f"rtsp://{cfg.username}:{password}@{cfg.rtsp_host}:{cfg.rtsp_port}"
-            f"/cam/realmonitor?channel={cfg.rtsp_channel}&subtype={subtype}"
-        )
+        for ch in channels:
+            urls.append(
+                f"rtsp://{cfg.username}:{password}@{cfg.rtsp_host}:{cfg.rtsp_port}"
+                f"/cam/realmonitor?channel={ch}&subtype={subtype}"
+            )
     return urls
 
 
@@ -255,24 +266,21 @@ def main() -> int:
     print("[INFO] Close ffplay window or press q in ffplay to stop.")
 
     try:
-        return subprocess.call(
-            [
-                str(ffplay),
-                "-loglevel",
-                "warning",
-                "-rtsp_transport",
-                "tcp",
-                "-fflags",
-                "nobuffer",
-                "-flags",
-                "low_delay",
-                "-analyzeduration",
-                cfg.ffplay_analyzeduration,
-                "-probesize",
-                cfg.ffplay_probesize,
-                selected_url,
-            ]
-        )
+        cmd = [
+            str(ffplay),
+            "-loglevel",
+            "warning",
+            "-rtsp_transport",
+            "tcp",
+            "-analyzeduration",
+            cfg.ffplay_analyzeduration,
+            "-probesize",
+            cfg.ffplay_probesize,
+        ]
+        if cfg.ffplay_low_latency:
+            cmd.extend(["-fflags", "nobuffer", "-flags", "low_delay"])
+        cmd.append(selected_url)
+        return subprocess.call(cmd)
     finally:
         stop_process(tunnel)
 
