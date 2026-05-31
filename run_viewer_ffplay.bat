@@ -16,7 +16,7 @@ if not exist "%PYTHON_EXE%" (
 )
 
 echo [INFO] Cleaning stale viewer/tunnel processes...
-for /f "skip=1 tokens=2 delims==" %%P in ('wmic process where "name='python.exe' and (CommandLine like '%%imou_ffplay_viewer.py%%' or CommandLine like '%%dh-p2p\\main.py%%')" get ProcessId /value 2^>nul') do (
+for /f "skip=1 tokens=2 delims==" %%P in ('wmic process where "name='python.exe' and (CommandLine like '%%imou_ffplay_viewer.py%%' or CommandLine like '%%imou_opencv_spike.py%%' or CommandLine like '%%dh-p2p\\main.py%%')" get ProcessId /value 2^>nul') do (
   if not "%%P"=="" (
     taskkill /PID %%P /T /F >nul 2>&1
   )
