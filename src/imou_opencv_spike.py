@@ -406,6 +406,7 @@ def recover_capture_only(
     reader: FrameReader | None,
     phase: str = "recover:capture-only",
 ) -> tuple[cv2.VideoCapture, FrameReader] | None:
+    saw_worker_timeout = False
     for attempt in range(1, 3):
         print(f"[INFO] {phase} attempt {attempt}/2")
         stop_reader_and_release(reader, cap)
@@ -418,9 +419,15 @@ def recover_capture_only(
             )
             if cap2 is None or reader2 is None:
                 print(f"[WARN] Reopen failed in {phase} attempt ({err})")
+                if err == "worker_timeout":
+                    saw_worker_timeout = True
+                    break
                 continue
             print(f"[INFO] {phase} success.")
             return cap2, reader2
+        if saw_worker_timeout:
+            print(f"[WARN] {phase}: worker timeout detected, escalate to tunnel restart")
+            return None
         time.sleep(0.6)
     return None
 
