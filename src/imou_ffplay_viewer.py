@@ -28,6 +28,7 @@ class ViewerConfig:
     ffplay_analyzeduration: str
     ffplay_probesize: str
     strict_subtype: bool
+    force_subtype1: bool
 
 
 def load_config() -> ViewerConfig:
@@ -45,6 +46,10 @@ def load_config() -> ViewerConfig:
     ffplay_analyzeduration = os.getenv("IMOU_FFPLAY_ANALYZEDURATION", "2000000").strip()
     ffplay_probesize = os.getenv("IMOU_FFPLAY_PROBESIZE", "1000000").strip()
     strict_subtype = os.getenv("IMOU_STRICT_SUBTYPE", "1").strip() == "1"
+    force_subtype1 = os.getenv("IMOU_FORCE_SUBTYPE1", "1").strip() == "1"
+
+    if force_subtype1:
+        subtype = "1"
 
     if not serial:
         raise ValueError("Missing env IMOU_CAMERA_SN")
@@ -66,6 +71,7 @@ def load_config() -> ViewerConfig:
         ffplay_analyzeduration=ffplay_analyzeduration,
         ffplay_probesize=ffplay_probesize,
         strict_subtype=strict_subtype,
+        force_subtype1=force_subtype1,
     )
 
 
@@ -220,6 +226,10 @@ def main() -> int:
     ffprobe = Path(cfg.ffmpeg_bin_dir) / "ffprobe.exe"
     rtsp_url = build_rtsp_url(cfg)
     candidate_urls = build_candidate_urls(cfg)
+    print(
+        f"[INFO] Effective subtype={cfg.subtype} "
+        f"(force_subtype1={cfg.force_subtype1}, strict_subtype={cfg.strict_subtype})"
+    )
     print("[INFO] Starting tunnel...")
     tunnel = start_tunnel(cfg, repo_dir)
     ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
