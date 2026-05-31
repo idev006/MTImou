@@ -7,7 +7,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 from queue import Queue, Empty
 
 import cv2
@@ -141,11 +141,50 @@ def open_capture(url: str) -> cv2.VideoCapture:
     os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
     cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
     try:
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 10000)
         cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 10000)
     except Exception:
         pass
     return cap
+
+
+class FrameReader:
+    def __init__(self, cap: cv2.VideoCapture) -> None:
+        self.cap = cap
+        self.stop_event = Event()
+        self.queue: Queue = Queue(maxsize=1)
+        self.read_failures = 0
+        self.last_ok_ts = time.monotonic()
+        self.thread = Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _run(self) -> None:
+        while not self.stop_event.is_set():
+            ok, frame = self.cap.read()
+            if not ok:
+                self.read_failures += 1
+                time.sleep(0.05)
+                continue
+
+            self.read_failures = 0
+            self.last_ok_ts = time.monotonic()
+            if self.queue.full():
+                try:
+                    self.queue.get_nowait()
+                except Empty:
+                    pass
+            self.queue.put(frame)
+
+    def get_latest(self, timeout: float = 0.05):
+        try:
+            return self.queue.get(timeout=timeout)
+        except Empty:
+            return None
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        self.thread.join(timeout=1.0)
 
 
 def _pump_lines(proc: subprocess.Popen, q: Queue) -> None:
@@ -200,14 +239,22 @@ def main() -> None:
     if not cap.isOpened():
         stop_process(tunnel)
         raise RuntimeError("Cannot open RTSP. Check SN/password/type/subtype.")
+    reader = FrameReader(cap)
 
     print("[INFO] Stream connected. Press 'q' to exit.")
     read_failures = 0
+    last_frame = None
 
     try:
         while True:
+            # Keep UI event loop active to avoid "Not Responding" on Windows.
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
+
             if tunnel.poll() is not None:
                 print("[WARN] Tunnel exited. Restarting...")
+                reader.stop()
                 stop_process(tunnel)
                 tunnel = start_tunnel(cfg, repo_dir)
                 ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
@@ -219,37 +266,45 @@ def main() -> None:
                     )
                 cap.release()
                 cap = open_capture(rtsp_url)
+                reader = FrameReader(cap)
                 read_failures = 0
                 continue
 
-            ok, frame = cap.read()
-            if not ok:
+            frame = reader.get_latest(timeout=0.05)
+            if frame is None:
                 read_failures += 1
                 print(f"[WARN] Frame read failed ({read_failures}/{cfg.max_read_failures})")
                 time.sleep(cfg.reconnect_sleep_sec)
+                if read_failures < cfg.max_read_failures:
+                    continue
+
+                print("[WARN] Too many read failures, restarting capture+tunnel...")
+                reader.stop()
                 cap.release()
+                stop_process(tunnel)
+                tunnel = start_tunnel(cfg, repo_dir)
+                ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
+                if not ready:
+                    tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
+                    raise RuntimeError(
+                        "Tunnel restart failed after read errors.\n"
+                        f"Recent tunnel log:\n{tail}"
+                    )
                 cap = open_capture(rtsp_url)
-                if read_failures >= cfg.max_read_failures:
-                    print("[WARN] Too many read failures, restarting tunnel...")
-                    stop_process(tunnel)
-                    tunnel = start_tunnel(cfg, repo_dir)
-                    ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
-                    if not ready:
-                        tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
-                        raise RuntimeError(
-                            "Tunnel restart failed after read errors.\n"
-                            f"Recent tunnel log:\n{tail}"
-                        )
-                    cap.release()
-                    cap = open_capture(rtsp_url)
-                    read_failures = 0
+                if not cap.isOpened():
+                    raise RuntimeError("Cannot reopen RTSP after tunnel restart.")
+                reader = FrameReader(cap)
+                read_failures = 0
                 continue
 
             read_failures = 0
-            cv2.imshow("IMOU Remote Stream", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+            last_frame = frame
+            cv2.imshow("IMOU Remote Stream", last_frame)
     finally:
+        try:
+            reader.stop()
+        except Exception:
+            pass
         cap.release()
         cv2.destroyAllWindows()
         stop_process(tunnel)
