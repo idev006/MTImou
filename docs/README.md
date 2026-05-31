@@ -14,7 +14,8 @@ This repository uses a document-driven approach before implementation.
 8. [07-spike-run-guide.md](./07-spike-run-guide.md)
 9. [08-openapi-migration-plan.md](./08-openapi-migration-plan.md)
 10. [09-remote-free-dhp2p-status.md](./09-remote-free-dhp2p-status.md)
-11. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
+11. [10-product-test-report-2026-05-31.md](./10-product-test-report-2026-05-31.md)
+12. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
 
 ## Working Model
 
