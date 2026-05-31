@@ -53,7 +53,7 @@ def load_config() -> ViewerConfig:
     ffplay_analyzeduration = os.getenv("IMOU_FFPLAY_ANALYZEDURATION", "2000000").strip()
     ffplay_probesize = os.getenv("IMOU_FFPLAY_PROBESIZE", "1000000").strip()
     strict_subtype = os.getenv("IMOU_STRICT_SUBTYPE", "1").strip() == "1"
-    force_subtype1 = os.getenv("IMOU_FORCE_SUBTYPE1", "1").strip() == "1"
+    force_subtype1 = os.getenv("IMOU_FORCE_SUBTYPE1", "0").strip() == "1"
     ffplay_low_latency = os.getenv("IMOU_FFPLAY_LOW_LATENCY", "0").strip() == "1"
     try_channel_zero = os.getenv("IMOU_TRY_CHANNEL0", "1").strip() == "1"
     use_ffprobe_precheck = os.getenv("IMOU_USE_FFPROBE_PRECHECK", "0").strip() == "1"
