@@ -20,7 +20,7 @@ set IMOU_CAMERA_USERNAME=admin
 set IMOU_CAMERA_PASSWORD=YOUR_PASSWORD
 set IMOU_CAMERA_TYPE=0
 set IMOU_FORCE_RELAY=1
-set IMOU_RTSP_SUBTYPE=1
+set IMOU_RTSP_SUBTYPE=0
 set IMOU_RTSP_HOST=127.0.0.1
 set IMOU_RTSP_PORT=554
 set IMOU_RTSP_INCLUDE_AUTH=1
@@ -30,6 +30,20 @@ set IMOU_ONE_URL_PER_TUNNEL=1
 ```
 
 ## 3) Run
+
+Default live viewer (recommended):
+
+```bat
+cd /d F:\programming\python\MTImou
+run_viewer.bat
+```
+
+OpenCV live viewer (advanced/debug):
+
+```bat
+cd /d F:\programming\python\MTImou
+run_viewer_opencv.bat
+```
 
 ```bat
 python F:\programming\python\MTImou\src\imou_opencv_spike.py
@@ -56,9 +70,12 @@ run_rust_probe.bat
 
 ## 4) Notes
 
-- If RTSP fails, try `IMOU_RTSP_SUBTYPE=1`.
+- If RTSP fails, try `IMOU_RTSP_SUBTYPE=1` (some firmwares expose H.264 only on sub stream).
 - If tunnel exits, script auto-restarts it.
-- If frame reads fail repeatedly, script restarts tunnel and reconnects.
+- If frame stalls, script restarts tunnel and reconnects (`IMOU_NO_FRAME_RESTART_SEC`, `IMOU_BOOTSTRAP_ATTEMPTS`).
+- For non-GUI stability testing, use headless mode:
+  - `set IMOU_HEADLESS=1`
+  - `set IMOU_HEADLESS_TARGET_FRAMES=120`
 - `dh-p2p` Python PoC is unstable by design; relay mode is usually more reliable than direct mode.
 - For IMOU Ranger 2 (`DevVersion 6.6.21001`), use relay mode + auth URL first for higher success rate.
 - Use `docs/09-remote-free-dhp2p-status.md` as the current source of truth for remote-free status.

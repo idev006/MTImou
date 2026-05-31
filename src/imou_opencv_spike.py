@@ -11,6 +11,7 @@ from threading import Event, Thread
 from queue import Queue, Empty
 
 import cv2
+import numpy as np
 
 
 @dataclass(slots=True)
@@ -26,8 +27,12 @@ class SpikeConfig:
     include_rtsp_auth: bool
     force_relay: bool
     startup_wait_sec: float
-    reconnect_sleep_sec: float
-    max_read_failures: int
+    no_frame_restart_sec: float
+    headless: bool
+    headless_target_frames: int
+    max_session_sec: float
+    bootstrap_attempts: int
+    first_frame_timeout_sec: float
 
 
 def load_config() -> SpikeConfig:
@@ -42,8 +47,12 @@ def load_config() -> SpikeConfig:
     include_rtsp_auth = os.getenv("IMOU_RTSP_INCLUDE_AUTH", "1").strip() == "1"
     force_relay = os.getenv("IMOU_FORCE_RELAY", "1").strip() == "1"
     startup_wait_sec = float(os.getenv("IMOU_STARTUP_WAIT_SEC", "90"))
-    reconnect_sleep_sec = float(os.getenv("IMOU_RECONNECT_SLEEP_SEC", "2"))
-    max_read_failures = int(os.getenv("IMOU_MAX_READ_FAILURES", "20"))
+    no_frame_restart_sec = float(os.getenv("IMOU_NO_FRAME_RESTART_SEC", "12"))
+    headless = os.getenv("IMOU_HEADLESS", "0").strip() == "1"
+    headless_target_frames = int(os.getenv("IMOU_HEADLESS_TARGET_FRAMES", "180"))
+    max_session_sec = float(os.getenv("IMOU_MAX_SESSION_SEC", "0"))
+    bootstrap_attempts = int(os.getenv("IMOU_BOOTSTRAP_ATTEMPTS", "4"))
+    first_frame_timeout_sec = float(os.getenv("IMOU_FIRST_FRAME_TIMEOUT_SEC", "8"))
 
     if not serial:
         raise ValueError("Missing env IMOU_CAMERA_SN")
@@ -62,8 +71,12 @@ def load_config() -> SpikeConfig:
         include_rtsp_auth=include_rtsp_auth,
         force_relay=force_relay,
         startup_wait_sec=startup_wait_sec,
-        reconnect_sleep_sec=reconnect_sleep_sec,
-        max_read_failures=max_read_failures,
+        no_frame_restart_sec=no_frame_restart_sec,
+        headless=headless,
+        headless_target_frames=headless_target_frames,
+        max_session_sec=max_session_sec,
+        bootstrap_attempts=bootstrap_attempts,
+        first_frame_timeout_sec=first_frame_timeout_sec,
     )
 
 
@@ -155,6 +168,7 @@ class FrameReader:
         self.stop_event = Event()
         self.queue: Queue = Queue(maxsize=1)
         self.read_failures = 0
+        self.total_frames = 0
         self.last_ok_ts = time.monotonic()
         self.thread = Thread(target=self._run, daemon=True)
         self.thread.start()
@@ -168,6 +182,7 @@ class FrameReader:
                 continue
 
             self.read_failures = 0
+            self.total_frames += 1
             self.last_ok_ts = time.monotonic()
             if self.queue.full():
                 try:
@@ -215,6 +230,14 @@ def wait_tunnel_ready(proc: subprocess.Popen, wait_sec: float) -> tuple[bool, li
     return False, seen
 
 
+def wait_first_frame(reader: FrameReader, timeout_sec: float) -> bool:
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        if reader.get_latest(timeout=0.05) is not None:
+            return True
+    return False
+
+
 def main() -> None:
     cfg = load_config()
     repo_dir = Path(os.getenv("DH_P2P_REPO_DIR", "")).resolve()
@@ -222,35 +245,73 @@ def main() -> None:
         raise ValueError("Missing env DH_P2P_REPO_DIR")
 
     rtsp_url = build_rtsp_url(cfg)
-    print("[INFO] Starting tunnel process...")
-    tunnel = start_tunnel(cfg, repo_dir)
-    ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
-    if not ready:
-        stop_process(tunnel)
-        tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
-        raise RuntimeError(
-            "Tunnel not ready (did not reach 'Ready to connect').\n"
-            "Likely peer/relay issue in dh-p2p PoC.\n"
-            f"Recent tunnel log:\n{tail}"
-        )
+    tunnel: subprocess.Popen | None = None
+    cap: cv2.VideoCapture | None = None
+    reader: FrameReader | None = None
 
-    print("[INFO] Opening RTSP:", rtsp_url.replace(cfg.password, "***"))
-    cap = open_capture(rtsp_url)
-    if not cap.isOpened():
-        stop_process(tunnel)
-        raise RuntimeError("Cannot open RTSP. Check SN/password/type/subtype.")
-    reader = FrameReader(cap)
+    for attempt in range(1, cfg.bootstrap_attempts + 1):
+        print(f"[INFO] Bootstrap attempt {attempt}/{cfg.bootstrap_attempts}")
+        print("[INFO] Starting tunnel process...")
+        tunnel = start_tunnel(cfg, repo_dir)
+        ready, lines = wait_tunnel_ready(tunnel, cfg.startup_wait_sec)
+        if not ready:
+            stop_process(tunnel)
+            tail = "\n".join(lines[-12:]) if lines else "(no tunnel output)"
+            print(
+                "[WARN] Tunnel not ready in bootstrap attempt.\n"
+                f"Recent tunnel log:\n{tail}"
+            )
+            continue
+
+        print("[INFO] Opening RTSP:", rtsp_url.replace(cfg.password, "***"))
+        cap = open_capture(rtsp_url)
+        if not cap.isOpened():
+            print("[WARN] RTSP open failed on this tunnel, retrying...")
+            cap.release()
+            stop_process(tunnel)
+            continue
+
+        reader = FrameReader(cap)
+        if not wait_first_frame(reader, cfg.first_frame_timeout_sec):
+            print("[WARN] No first frame yet, restarting bootstrap...")
+            reader.stop()
+            cap.release()
+            stop_process(tunnel)
+            reader = None
+            cap = None
+            tunnel = None
+            continue
+        break
+    else:
+        raise RuntimeError(
+            "Failed to bootstrap stream after retries. "
+            "Relay session established but no decodable frame arrived."
+        )
+    assert tunnel is not None
+    assert cap is not None
+    assert reader is not None
 
     print("[INFO] Stream connected. Press 'q' to exit.")
-    read_failures = 0
+    print(
+        "[INFO] Health guard:",
+        f"restart if no frame for {cfg.no_frame_restart_sec:.1f}s",
+        f"(headless={cfg.headless})",
+    )
     last_frame = None
+    last_frame_ts = time.monotonic()
+    session_started = time.monotonic()
+    no_frame_warn_logged_at = 0.0
+
+    if not cfg.headless:
+        cv2.namedWindow("IMOU Remote Stream", cv2.WINDOW_NORMAL)
 
     try:
         while True:
             # Keep UI event loop active to avoid "Not Responding" on Windows.
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                break
+            if not cfg.headless:
+                key = cv2.waitKey(20) & 0xFF
+                if key == ord("q"):
+                    break
 
             if tunnel.poll() is not None:
                 print("[WARN] Tunnel exited. Restarting...")
@@ -267,18 +328,47 @@ def main() -> None:
                 cap.release()
                 cap = open_capture(rtsp_url)
                 reader = FrameReader(cap)
-                read_failures = 0
+                last_frame_ts = time.monotonic()
                 continue
 
-            frame = reader.get_latest(timeout=0.05)
+            frame = reader.get_latest(timeout=0.02)
             if frame is None:
-                read_failures += 1
-                print(f"[WARN] Frame read failed ({read_failures}/{cfg.max_read_failures})")
-                time.sleep(cfg.reconnect_sleep_sec)
-                if read_failures < cfg.max_read_failures:
+                idle_sec = time.monotonic() - reader.last_ok_ts
+                now = time.monotonic()
+                if idle_sec >= 1.5 and now - no_frame_warn_logged_at >= 2.0:
+                    print(f"[WARN] No frame for {idle_sec:.1f}s")
+                    no_frame_warn_logged_at = now
+
+                if idle_sec < cfg.no_frame_restart_sec:
+                    if not cfg.headless and last_frame is None:
+                        canvas = np.zeros((360, 640, 3), dtype=np.uint8)
+                        cv2.putText(
+                            canvas,
+                            "Waiting for first frame...",
+                            (20, 90),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.8,
+                            (0, 200, 255),
+                            2,
+                            cv2.LINE_AA,
+                        )
+                        cv2.putText(
+                            canvas,
+                            f"idle={idle_sec:.1f}s",
+                            (20, 140),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (180, 180, 180),
+                            2,
+                            cv2.LINE_AA,
+                        )
+                        cv2.imshow("IMOU Remote Stream", canvas)
                     continue
 
-                print("[WARN] Too many read failures, restarting capture+tunnel...")
+                print(
+                    "[WARN] Frame stalled, restarting capture+tunnel...",
+                    f"idle={idle_sec:.1f}s",
+                )
                 reader.stop()
                 cap.release()
                 stop_process(tunnel)
@@ -294,19 +384,60 @@ def main() -> None:
                 if not cap.isOpened():
                     raise RuntimeError("Cannot reopen RTSP after tunnel restart.")
                 reader = FrameReader(cap)
-                read_failures = 0
+                last_frame = None
+                last_frame_ts = time.monotonic()
                 continue
 
-            read_failures = 0
             last_frame = frame
-            cv2.imshow("IMOU Remote Stream", last_frame)
+            last_frame_ts = time.monotonic()
+
+            if cfg.headless and reader.total_frames >= cfg.headless_target_frames:
+                elapsed = time.monotonic() - session_started
+                fps = reader.total_frames / max(elapsed, 0.001)
+                print(
+                    f"[SUCCESS] Headless stream OK: {reader.total_frames} frames in "
+                    f"{elapsed:.2f}s ({fps:.2f} fps)"
+                )
+                return
+
+            if not cfg.headless:
+                elapsed = time.monotonic() - session_started
+                fps = reader.total_frames / max(elapsed, 0.001)
+                cv2.putText(
+                    last_frame,
+                    f"frames={reader.total_frames} fps~{fps:.1f}",
+                    (20, 35),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.75,
+                    (80, 255, 80),
+                    2,
+                    cv2.LINE_AA,
+                )
+                cv2.putText(
+                    last_frame,
+                    time.strftime("%Y-%m-%d %H:%M:%S"),
+                    (20, 70),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (80, 220, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+                cv2.imshow("IMOU Remote Stream", last_frame)
+
+            if cfg.max_session_sec > 0 and (time.monotonic() - session_started) >= cfg.max_session_sec:
+                print("[INFO] Max session reached, stopping.")
+                return
     finally:
         try:
-            reader.stop()
+            if reader is not None:
+                reader.stop()
         except Exception:
             pass
-        cap.release()
-        cv2.destroyAllWindows()
+        if cap is not None:
+            cap.release()
+        if not cfg.headless:
+            cv2.destroyAllWindows()
         stop_process(tunnel)
 
 
