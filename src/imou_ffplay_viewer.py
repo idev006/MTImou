@@ -25,6 +25,8 @@ class ViewerConfig:
     force_relay: bool
     startup_wait_sec: float
     ffmpeg_bin_dir: str
+    ffplay_analyzeduration: str
+    ffplay_probesize: str
 
 
 def load_config() -> ViewerConfig:
@@ -39,6 +41,8 @@ def load_config() -> ViewerConfig:
     force_relay = os.getenv("IMOU_FORCE_RELAY", "1").strip() == "1"
     startup_wait_sec = float(os.getenv("IMOU_STARTUP_WAIT_SEC", "90"))
     ffmpeg_bin_dir = os.getenv("FFMPEG_BIN_DIR", r"F:\ffmpeg\bin").strip()
+    ffplay_analyzeduration = os.getenv("IMOU_FFPLAY_ANALYZEDURATION", "2000000").strip()
+    ffplay_probesize = os.getenv("IMOU_FFPLAY_PROBESIZE", "1000000").strip()
 
     if not serial:
         raise ValueError("Missing env IMOU_CAMERA_SN")
@@ -57,6 +61,8 @@ def load_config() -> ViewerConfig:
         force_relay=force_relay,
         startup_wait_sec=startup_wait_sec,
         ffmpeg_bin_dir=ffmpeg_bin_dir,
+        ffplay_analyzeduration=ffplay_analyzeduration,
+        ffplay_probesize=ffplay_probesize,
     )
 
 
@@ -228,9 +234,9 @@ def main() -> int:
                 "-flags",
                 "low_delay",
                 "-analyzeduration",
-                "0",
+                cfg.ffplay_analyzeduration,
                 "-probesize",
-                "32",
+                cfg.ffplay_probesize,
                 selected_url,
             ]
         )
