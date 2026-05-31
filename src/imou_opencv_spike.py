@@ -56,6 +56,42 @@ class SessionStats:
 CaptureLike = Any
 
 
+def last_good_subtype_path() -> Path:
+    explicit = os.getenv("IMOU_LAST_GOOD_SUBTYPE_FILE", "").strip()
+    if explicit:
+        return Path(explicit)
+    return Path("logs") / "last_good_subtype.txt"
+
+
+def load_last_good_subtype() -> str | None:
+    path = last_good_subtype_path()
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value if value in {"0", "1"} else None
+
+
+def save_last_good_subtype(subtype: str) -> None:
+    if subtype not in {"0", "1"}:
+        return
+    path = last_good_subtype_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(subtype, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def subtype_from_url(url: str) -> str | None:
+    marker = "subtype="
+    idx = url.find(marker)
+    if idx < 0:
+        return None
+    value = url[idx + len(marker) : idx + len(marker) + 1]
+    return value if value in {"0", "1"} else None
+
+
 def load_config() -> SpikeConfig:
     serial = os.getenv("IMOU_CAMERA_SN", "").strip()
     username = os.getenv("IMOU_CAMERA_USERNAME", "admin").strip()
@@ -122,7 +158,8 @@ def build_rtsp_url(cfg: SpikeConfig) -> str:
 
 
 def build_rtsp_urls(cfg: SpikeConfig) -> list[str]:
-    preferred = cfg.subtype if cfg.subtype in {"0", "1"} else "0"
+    remembered = load_last_good_subtype()
+    preferred = remembered or (cfg.subtype if cfg.subtype in {"0", "1"} else "0")
     other = "1" if preferred == "0" else "0"
     urls: list[str] = []
     for subtype in [preferred, other]:
@@ -537,6 +574,9 @@ def bootstrap_session(
             time.sleep(1.0)
             continue
 
+        chosen_subtype = subtype_from_url(rtsp_url)
+        if chosen_subtype is not None:
+            save_last_good_subtype(chosen_subtype)
         print(f"[INFO] {phase} success.")
         return tunnel, cap, reader
 
@@ -567,6 +607,9 @@ def recover_capture_only(
                     saw_worker_timeout = True
                     break
                 continue
+            chosen_subtype = subtype_from_url(rtsp_url)
+            if chosen_subtype is not None:
+                save_last_good_subtype(chosen_subtype)
             print(f"[INFO] {phase} success.")
             return cap2, reader2
         if saw_worker_timeout:
