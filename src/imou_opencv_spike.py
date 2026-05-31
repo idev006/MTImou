@@ -312,6 +312,7 @@ def bootstrap_session(
 
 def main() -> None:
     enforce_venv_python()
+    print(f"[INFO] Runtime python: {sys.executable}")
     cfg = load_config()
     repo_dir = Path(os.getenv("DH_P2P_REPO_DIR", "")).resolve()
     if not str(repo_dir) or str(repo_dir) == ".":
