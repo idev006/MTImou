@@ -40,6 +40,8 @@ class ViewerRuntimeSettings:
     first_frame_timeout_sec: float
     target_probe_timeout_sec: float
     preferred_mode: str
+    remote_multi_subtype: str
+    remote_single_subtype: str
     log_path: Path
     window_name: str
 
@@ -62,4 +64,3 @@ class StreamState:
     next_retry_ts: float = 0.0
     status_text: str = ""
     target_key: tuple[str, str, int] | None = None
-

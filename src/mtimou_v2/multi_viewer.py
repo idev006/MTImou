@@ -26,9 +26,12 @@ def run_multi_camera(camera_ids: list[str] | None, *, log_path, window_name: str
     settings = viewer_runtime_settings(log_path=log_path, window_name=window_name)
     log = make_logger(settings.log_path)
     style = overlay_style()
-    states = [build_stream_state(camera, settings) for camera in cameras]
+    states = [build_stream_state(camera, settings, camera_count=len(cameras)) for camera in cameras]
     for state in states:
-        log(f"[INFO] Camera={state.camera.camera_id} mode={state.mode} target={state.host}:{state.port} url={state.safe_url}")
+        log(
+            f"[INFO] Camera={state.camera.camera_id} mode={state.mode} "
+            f"target={state.host}:{state.port} subtype={state.camera.subtype} url={state.safe_url}"
+        )
     grid_cols = choose_grid_cols(len(states))
     log(f"[INFO] Grid layout cameras={len(states)} cols={grid_cols}")
 
@@ -51,7 +54,7 @@ def run_multi_camera(camera_ids: list[str] | None, *, log_path, window_name: str
                     continue
 
                 if (state.cap is None or not state.cap.isOpened()) and now >= state.next_retry_ts:
-                    reopen_stream(state, settings, log, "capture-not-open")
+                    reopen_stream(state, settings, log, "capture-not-open", camera_count=len(states))
 
                 ok = False
                 frame = None
@@ -79,7 +82,7 @@ def run_multi_camera(camera_ids: list[str] | None, *, log_path, window_name: str
                         cv2.putText(tile, f"status={state.status_text}", (10, 98), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (180, 180, 180), style["small_thickness"], cv2.LINE_AA)
                     if idle >= settings.restart_idle_sec and now >= state.next_retry_ts:
                         state.status_text = f"idle {idle:.1f}s"
-                        reopen_stream(state, settings, log, f"idle={idle:.1f}s")
+                        reopen_stream(state, settings, log, f"idle={idle:.1f}s", camera_count=len(states))
                 tiles.append(tile)
 
             grid = compose_grid(tiles, cols=grid_cols)

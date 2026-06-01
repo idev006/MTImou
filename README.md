@@ -106,6 +106,25 @@ set IMOU_TARGET_MODE=public
 run_multi_camera_stable.bat cam1 cam2
 ```
 
+## FPS Tuning
+
+For remote multi-camera viewing, the runtime now defaults to substream on `ddns/public`
+targets to improve FPS and reduce uplink pressure:
+
+- `IMOU_REMOTE_MULTI_SUBTYPE=1` (default)
+
+Useful overrides:
+
+```bat
+set IMOU_REMOTE_MULTI_SUBTYPE=1
+set IMOU_REMOTE_SINGLE_SUBTYPE=0
+```
+
+Notes:
+
+- Multi-camera remote viewing usually performs better with `subtype=1`
+- Single-camera remote viewing can stay on `subtype=0` for higher detail
+
 ## Public / Worldwide Access
 
 This project already supports worldwide viewing through router port forwarding.

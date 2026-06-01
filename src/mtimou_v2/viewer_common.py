@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import math
 import time
 
@@ -67,13 +68,32 @@ def compose_grid(frames: list[np.ndarray], cols: int = 2) -> np.ndarray:
     return np.vstack(row_imgs)
 
 
-def build_stream_state(camera: CameraConfig, settings: ViewerRuntimeSettings) -> StreamState:
+def effective_camera_profile(
+    camera: CameraConfig,
+    *,
+    target_mode: str,
+    camera_count: int,
+    settings: ViewerRuntimeSettings,
+) -> CameraConfig:
+    subtype = camera.subtype
+    if target_mode in {"ddns", "public"}:
+        if camera_count > 1 and settings.remote_multi_subtype:
+            subtype = settings.remote_multi_subtype
+        elif camera_count <= 1 and settings.remote_single_subtype:
+            subtype = settings.remote_single_subtype
+    if subtype == camera.subtype:
+        return camera
+    return replace(camera, subtype=subtype)
+
+
+def build_stream_state(camera: CameraConfig, settings: ViewerRuntimeSettings, *, camera_count: int = 1) -> StreamState:
     target = pick_target(camera, preferred_mode=settings.preferred_mode, timeout_sec=settings.target_probe_timeout_sec)
-    url, safe_url = build_rtsp_url(camera, target)
-    cap = open_capture(url, camera.transport) if camera.password else None
+    runtime_camera = effective_camera_profile(camera, target_mode=target.mode, camera_count=camera_count, settings=settings)
+    url, safe_url = build_rtsp_url(runtime_camera, target)
+    cap = open_capture(url, runtime_camera.transport) if runtime_camera.password else None
     now = time.monotonic()
     return StreamState(
-        camera=camera,
+        camera=runtime_camera,
         mode=target.mode,
         host=target.host,
         port=target.port,
@@ -93,6 +113,8 @@ def reopen_stream(
     settings: ViewerRuntimeSettings,
     log,
     reason: str,
+    *,
+    camera_count: int = 1,
 ) -> None:
     state.reconnects += 1
     log(f"[WARN] Reopening {state.camera.camera_id} ({reason}) attempt #{state.reconnects}")
@@ -124,14 +146,18 @@ def reopen_stream(
     state.mode = target.mode
     state.host = target.host
     state.port = target.port
-    state.url, state.safe_url = build_rtsp_url(state.camera, target)
+    runtime_camera = effective_camera_profile(state.camera, target_mode=target.mode, camera_count=camera_count, settings=settings)
+    state.camera = runtime_camera
+    state.url, state.safe_url = build_rtsp_url(runtime_camera, target)
 
-    state.cap = open_capture(state.url, state.camera.transport) if state.camera.password else None
+    state.cap = open_capture(state.url, runtime_camera.transport) if runtime_camera.password else None
     state.next_retry_ts = time.monotonic() + settings.reconnect_sleep_sec
     if state.cap is None or not state.cap.isOpened():
         state.status_text = "open failed"
         log(f"[WARN] Reopen failed: {state.camera.camera_id}")
         return
-    state.status_text = "reconnected"
-    log(f"[INFO] Reopen opened capture: {state.camera.camera_id} mode={state.mode} target={state.host}:{state.port}")
-
+    state.status_text = f"reconnected subtype={runtime_camera.subtype}"
+    log(
+        f"[INFO] Reopen opened capture: {state.camera.camera_id} "
+        f"mode={state.mode} target={state.host}:{state.port} subtype={runtime_camera.subtype}"
+    )

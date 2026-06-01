@@ -16,12 +16,12 @@ def run_single_camera(camera: CameraConfig, *, log_path, window_name: str) -> in
     log = make_logger(settings.log_path)
     style = overlay_style()
 
-    state = build_stream_state(camera, settings)
+    state = build_stream_state(camera, settings, camera_count=1)
     log(f"[INFO] Camera={camera.camera_id} name={camera.name}")
     log(f"[INFO] Candidate targets: {', '.join(target_modes_summary(camera))}")
     log(f"[INFO] Preferred mode={settings.preferred_mode}")
     log("[INFO] Runtime failover enabled: the viewer will re-evaluate LAN/DDNS/public during reconnects.")
-    log(f"[INFO] Mode={state.mode} Opening direct RTSP: {state.safe_url}")
+    log(f"[INFO] Mode={state.mode} subtype={state.camera.subtype} Opening direct RTSP: {state.safe_url}")
     log(
         f"[INFO] Health guard: restart if no frame for {settings.restart_idle_sec:.1f}s "
         f"first-frame-timeout={settings.first_frame_timeout_sec:.1f}s"
@@ -41,7 +41,7 @@ def run_single_camera(camera: CameraConfig, *, log_path, window_name: str) -> in
                 break
 
             if state.cap is None or not state.cap.isOpened():
-                reopen_stream(state, settings, log, "capture-not-open")
+                reopen_stream(state, settings, log, "capture-not-open", camera_count=1)
                 if state.cap is None:
                     canvas = blank_canvas()
                     cv2.putText(canvas, "Reconnect failed. Press q to exit.", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2, cv2.LINE_AA)
@@ -68,7 +68,7 @@ def run_single_camera(camera: CameraConfig, *, log_path, window_name: str) -> in
                 cv2.putText(canvas, "Waiting for stream recovery...", (16, 86), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (220, 220, 220), style["small_thickness"], cv2.LINE_AA)
                 cv2.imshow(settings.window_name, canvas)
                 if idle >= settings.restart_idle_sec:
-                    reopen_stream(state, settings, log, f"idle={idle:.1f}s")
+                    reopen_stream(state, settings, log, f"idle={idle:.1f}s", camera_count=1)
 
             if (cv2.waitKey(20) & 0xFF) == ord("q"):
                 break
@@ -84,4 +84,3 @@ def run_single_camera(camera: CameraConfig, *, log_path, window_name: str) -> in
         )
 
     return 0
-
