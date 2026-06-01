@@ -15,24 +15,31 @@ Provide a simple desktop UI so an operator can use MTImou without editing batch 
    - run health checks
    - inspect last results
 
-## UX Scope
+## Current UX Scope
 
-The first UI release will provide:
+The current UI release provides:
 
-1. Camera list with names and current targets
+1. A dashboard-oriented layout instead of one long form
+   - top summary cards for enabled cameras, target mode, and DDNS host
+   - tabbed layout for `Dashboard`, `Settings`, and `Operator Guide`
+2. A multi-column camera table
+   - columns for camera name, LAN, DDNS, public target, and enabled status
    - supports multi-select for launching a chosen subset
-2. Mode selector: `auto`, `lan`, `ddns`, `public`
-3. Buttons:
+   - includes quick actions for `Select All`, `Select Enabled`, and `Clear Selection`
+3. Operator launch actions
    - view selected camera(s)
    - view all enabled cameras
    - run health check
-4. Settings fields:
+   - open logs and README
+4. Settings fields
+   - target mode: `auto`, `lan`, `ddns`, `public`
    - shared DDNS host
+   - shared camera username
    - camera passwords generated dynamically from the current deployment
    - password visibility toggle
-5. Output panel:
-   - last command output
-   - health-check result
+5. Activity and guidance panels
+   - recent command output
+   - concise operator flow and target mode explanations
 
 ## Technical Approach
 
@@ -40,9 +47,11 @@ The first UI release will provide:
 - Run only with project `.venv`
 - Reuse existing scripts and config files
 - Update only local operator config in `camera.env.bat`
+- Keep View logic thin and route state/commands through the ViewModel and settings store
 
 ## Non-Goals
 
 - Full router administration in the UI
-- Video embedding inside the control panel in the first release
+- Video embedding inside the control panel
 - Advanced recording/NVR workflows
+- Full camera CRUD management in this release
