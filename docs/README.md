@@ -2,6 +2,11 @@
 
 This repository uses a document-driven approach before implementation.
 
+Current operator-facing entrypoints:
+
+- [../README.md](../README.md)
+- [multi-camera-runbook.md](./multi-camera-runbook.md)
+
 ## Document Index
 
 1. [00-executive-summary.md](./00-executive-summary.md)
@@ -15,7 +20,8 @@ This repository uses a document-driven approach before implementation.
 9. [08-openapi-migration-plan.md](./08-openapi-migration-plan.md)
 10. [09-remote-free-dhp2p-status.md](./09-remote-free-dhp2p-status.md)
 11. [10-product-test-report-2026-05-31.md](./10-product-test-report-2026-05-31.md)
-12. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
+12. [multi-camera-runbook.md](./multi-camera-runbook.md)
+13. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
 
 ## Working Model
 
