@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 
-from camera_registry import get_camera, target_modes_summary
+THIS_DIR = Path(__file__).resolve().parent
+if str(THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(THIS_DIR))
+
+from mtimou_v2.registry import get_camera
+from mtimou_v2.single_viewer import run_single_camera
 from venv_guard import enforce_venv_python
 
 
 def main() -> int:
     enforce_venv_python()
-
     if len(sys.argv) < 2:
         print("Usage: run_camera_stable.py <camera-id>")
         return 2
@@ -22,21 +25,10 @@ def main() -> int:
         print(f"[ERROR] Missing password for {camera.camera_id}.")
         return 2
 
-    preferred_mode = os.getenv("IMOU_TARGET_MODE", "auto").strip().lower()
     root = Path(__file__).resolve().parents[1]
-    log_name = f"direct_{camera.camera_id}_latest.log"
-    env = os.environ.copy()
-    env["IMOU_CAMERA_ID"] = camera.camera_id
-    env["IMOU_DIRECT_WINDOW_NAME"] = camera.name
-    env["IMOU_DIRECT_LOG_PATH"] = str(root / "logs" / log_name)
-
-    print(f"[INFO] Camera={camera.camera_id} name={camera.name}")
-    print(f"[INFO] Candidate targets: {', '.join(target_modes_summary(camera))}")
-    print(f"[INFO] Preferred mode={preferred_mode}")
-    print("[INFO] Runtime failover enabled: the viewer will re-evaluate LAN/DDNS/public during reconnects.")
-    viewer = root / "src" / "direct_rtsp_opencv.py"
-    result = subprocess.run([sys.executable, str(viewer)], env=env, check=False)
-    return result.returncode
+    log_path = root / "logs" / f"direct_{camera.camera_id}_latest.log"
+    window_name = os.getenv("IMOU_DIRECT_WINDOW_NAME", camera.name).strip() or camera.name
+    return run_single_camera(camera, log_path=log_path, window_name=window_name)
 
 
 if __name__ == "__main__":

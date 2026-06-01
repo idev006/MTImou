@@ -123,6 +123,8 @@ Important note:
 
 ## Main Files
 
+- `src/mtimou_v2/`
+  - Clean production-core rewrite for config, target selection, viewers, health, and resilience
 - [`run_camera_stable.bat`](./run_camera_stable.bat)
   - Run one camera by `camera-id`
 - [`run_multi_camera_stable.bat`](./run_multi_camera_stable.bat)
@@ -183,6 +185,7 @@ Operational and architecture documents live in [`docs`](./docs):
 - [`docs/14-final-acceptance-checklist.md`](./docs/14-final-acceptance-checklist.md)
 - [`docs/15-cam3-cam4-rollout-template.md`](./docs/15-cam3-cam4-rollout-template.md)
 - [`docs/16-ui-control-panel-plan.md`](./docs/16-ui-control-panel-plan.md)
+- [`docs/18-clean-runtime-rewrite-plan.md`](./docs/18-clean-runtime-rewrite-plan.md)
 
 ## Roadmap
 
