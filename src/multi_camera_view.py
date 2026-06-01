@@ -56,7 +56,8 @@ def open_capture(url: str, transport: str) -> cv2.VideoCapture:
 
 
 def build_state(camera: CameraConfig) -> StreamState:
-    target = pick_target(camera)
+    preferred_mode = os.getenv("IMOU_TARGET_MODE", "auto").strip().lower()
+    target = pick_target(camera, preferred_mode=preferred_mode)
     safe_password = quote(camera.password, safe="")
     url = (
         f"rtsp://{camera.username}:{safe_password}@{target.host}:{target.port}"

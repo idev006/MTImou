@@ -17,6 +17,8 @@ class CameraConfig:
     name: str
     lan_host: str
     lan_port: int
+    ddns_host: str
+    ddns_port: int
     public_host: str
     public_port: int
     channel: str
@@ -75,6 +77,8 @@ def load_cameras(config_path: Path | None = None) -> list[CameraConfig]:
                 name=str(item.get("name", item["id"])),
                 lan_host=str(item["lan_host"]),
                 lan_port=int(item.get("lan_port", 554)),
+                ddns_host=str(item.get("ddns_host", "")).strip(),
+                ddns_port=int(item.get("ddns_port", item.get("public_port", 45554))),
                 public_host=str(item["public_host"]),
                 public_port=int(item.get("public_port", 45554)),
                 channel=str(item.get("channel", "1")),
@@ -95,10 +99,50 @@ def get_camera(camera_id: str, config_path: Path | None = None) -> CameraConfig:
     raise KeyError(f"Camera id not found: {camera_id}")
 
 
-def pick_target(camera: CameraConfig, timeout_sec: float = 1.2) -> CameraTarget:
-    if _probe_tcp(camera.lan_host, camera.lan_port, timeout_sec=timeout_sec):
-        return CameraTarget(camera=camera, mode="lan", host=camera.lan_host, port=camera.lan_port)
-    return CameraTarget(camera=camera, mode="public", host=camera.public_host, port=camera.public_port)
+def pick_target(camera: CameraConfig, timeout_sec: float = 1.2, preferred_mode: str = "auto") -> CameraTarget:
+    preferred_mode = preferred_mode.strip().lower()
+
+    def lan_target() -> CameraTarget | None:
+        if _probe_tcp(camera.lan_host, camera.lan_port, timeout_sec=timeout_sec):
+            return CameraTarget(camera=camera, mode="lan", host=camera.lan_host, port=camera.lan_port)
+        return None
+
+    def ddns_target() -> CameraTarget | None:
+        if camera.ddns_host:
+            return CameraTarget(camera=camera, mode="ddns", host=camera.ddns_host, port=camera.ddns_port)
+        return None
+
+    def public_target() -> CameraTarget:
+        return CameraTarget(camera=camera, mode="public", host=camera.public_host, port=camera.public_port)
+
+    if preferred_mode == "lan":
+        target = lan_target()
+        if target is None:
+            raise RuntimeError(f"LAN target unavailable for {camera.camera_id}")
+        return target
+    if preferred_mode == "ddns":
+        target = ddns_target()
+        if target is None:
+            raise RuntimeError(f"DDNS target not configured for {camera.camera_id}")
+        return target
+    if preferred_mode == "public":
+        return public_target()
+
+    target = lan_target()
+    if target is not None:
+        return target
+    target = ddns_target()
+    if target is not None:
+        return target
+    return public_target()
+
+
+def target_modes_summary(camera: CameraConfig) -> list[str]:
+    modes = [f"lan={camera.lan_host}:{camera.lan_port}"]
+    if camera.ddns_host:
+        modes.append(f"ddns={camera.ddns_host}:{camera.ddns_port}")
+    modes.append(f"public={camera.public_host}:{camera.public_port}")
+    return modes
 
 
 def enabled_cameras(config_path: Path | None = None) -> list[CameraConfig]:
