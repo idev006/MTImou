@@ -88,6 +88,13 @@ class ControlPanelViewModel:
         self.services.launch_batch("run_multi_camera_stable.bat", camera_ids)
         return (f"[INFO] Launched run_multi_camera_stable.bat {' '.join(camera_ids)}", f"Launched selected cameras: {', '.join(camera_ids)}")
 
+    def launch_selected_high_fps(self, camera_ids: list[str]) -> tuple[str, str]:
+        self.services.launch_batch("run_multi_camera_high_fps.bat", camera_ids)
+        return (
+            f"[INFO] Launched run_multi_camera_high_fps.bat {' '.join(camera_ids)}",
+            f"Launched high-FPS split view for: {', '.join(camera_ids)}",
+        )
+
     def launch_all(self) -> tuple[list[str], tuple[str, str] | None]:
         ids = [camera.camera_id for camera in enabled_cameras()]
         if not ids:

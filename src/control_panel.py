@@ -454,6 +454,9 @@ class ControlPanelWindow(QMainWindow):
         btn_selected.setObjectName("primary")
         btn_selected.clicked.connect(self.launch_selected_cameras)
 
+        btn_selected_high_fps = QPushButton("View Selected Cameras (High FPS)")
+        btn_selected_high_fps.clicked.connect(self.launch_selected_cameras_high_fps)
+
         btn_all = QPushButton("View All Enabled Cameras")
         btn_all.clicked.connect(self.launch_all_cameras)
 
@@ -466,7 +469,7 @@ class ControlPanelWindow(QMainWindow):
         btn_readme = QPushButton("Open Project README")
         btn_readme.clicked.connect(self.open_readme)
 
-        for btn in [btn_selected, btn_all, btn_health, btn_logs, btn_readme]:
+        for btn in [btn_selected, btn_selected_high_fps, btn_all, btn_health, btn_logs, btn_readme]:
             action_layout.addWidget(btn)
 
         action_layout.addWidget(self.open_log_checkbox)
@@ -1065,6 +1068,16 @@ class ControlPanelWindow(QMainWindow):
             return
         self.save_settings()
         message, status = self.vm.launch_selected(camera_ids)
+        self.append_output(message)
+        self._set_status(status)
+
+    def launch_selected_cameras_high_fps(self) -> None:
+        camera_ids = self.selected_camera_ids()
+        if not camera_ids:
+            QMessageBox.warning(self, WINDOW_TITLE, "Please select one or more cameras first.")
+            return
+        self.save_settings()
+        message, status = self.vm.launch_selected_high_fps(camera_ids)
         self.append_output(message)
         self._set_status(status)
 

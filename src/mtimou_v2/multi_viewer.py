@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import threading
 import time
 
 import cv2
@@ -9,6 +8,7 @@ from mtimou_v2.logging_utils import make_logger
 from mtimou_v2.registry import enabled_cameras, get_camera
 from mtimou_v2.settings import viewer_runtime_settings
 from mtimou_v2.viewer_common import (
+    CameraReaderWorker,
     blank_tile,
     build_stream_state,
     choose_grid_cols,
@@ -16,58 +16,6 @@ from mtimou_v2.viewer_common import (
     overlay_style,
     reopen_stream,
 )
-
-
-class CameraWorker(threading.Thread):
-    def __init__(self, state, settings, log, *, camera_count: int) -> None:
-        super().__init__(daemon=True)
-        self.state = state
-        self.settings = settings
-        self.log = log
-        self.camera_count = camera_count
-        self.stop_event = threading.Event()
-
-    def run(self) -> None:
-        state = self.state
-        while not self.stop_event.is_set():
-            now = time.monotonic()
-            if not state.camera.password:
-                state.status_text = "missing password"
-                time.sleep(0.2)
-                continue
-
-            if (state.cap is None or not state.cap.isOpened()) and now >= state.next_retry_ts:
-                reopen_stream(state, self.settings, self.log, "capture-not-open", camera_count=self.camera_count)
-                if state.cap is None or not state.cap.isOpened():
-                    time.sleep(0.05)
-                    continue
-
-            ok = False
-            frame = None
-            if state.cap is not None and state.cap.isOpened():
-                ok, frame = state.cap.read()
-
-            now = time.monotonic()
-            if ok and frame is not None:
-                state.frame_count += 1
-                state.last_ok = now
-                state.last_frame = frame
-                state.status_text = "ok"
-                continue
-
-            idle = now - state.last_ok
-            if idle >= self.settings.restart_idle_sec and now >= state.next_retry_ts:
-                state.status_text = f"idle {idle:.1f}s"
-                reopen_stream(state, self.settings, self.log, f"idle={idle:.1f}s", camera_count=self.camera_count)
-            else:
-                state.status_text = f"waiting {idle:.1f}s"
-                time.sleep(0.01)
-
-        if state.cap is not None:
-            state.cap.release()
-
-    def stop(self) -> None:
-        self.stop_event.set()
 
 
 def run_multi_camera(camera_ids: list[str] | None, *, log_path, window_name: str) -> int:
@@ -88,7 +36,7 @@ def run_multi_camera(camera_ids: list[str] | None, *, log_path, window_name: str
     grid_cols = choose_grid_cols(len(states))
     log(f"[INFO] Grid layout cameras={len(states)} cols={grid_cols}")
 
-    workers = [CameraWorker(state, settings, log, camera_count=len(states)) for state in states]
+    workers = [CameraReaderWorker(state, settings, log, camera_count=len(states)) for state in states]
     for worker in workers:
         worker.start()
 

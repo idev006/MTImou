@@ -55,6 +55,13 @@ cd /d F:\programming\python\MTImou
 run_multi_camera_stable.bat cam1 cam2
 ```
 
+High-FPS split view for remote operation:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_multi_camera_high_fps.bat cam1 cam2
+```
+
 Grid behavior:
 
 - `1 camera` -> `1x1`
@@ -125,6 +132,7 @@ Notes:
 - Multi-camera remote viewing usually performs better with `subtype=1`
 - Single-camera remote viewing can stay on `subtype=0` for higher detail
 - Multi-camera viewing now uses parallel camera readers so one stream no longer drags the other down as much
+- If you need the highest practical FPS per camera, use `run_multi_camera_high_fps.bat` so each camera runs in its own viewer process
 
 ## Public / Worldwide Access
 
