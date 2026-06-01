@@ -16,6 +16,9 @@ def viewer_runtime_settings(*, log_path: Path, window_name: str) -> ViewerRuntim
         preferred_mode=os.getenv("IMOU_TARGET_MODE", "auto").strip().lower(),
         remote_multi_subtype=os.getenv("IMOU_REMOTE_MULTI_SUBTYPE", "1").strip(),
         remote_single_subtype=os.getenv("IMOU_REMOTE_SINGLE_SUBTYPE", "").strip(),
+        wait_key_ms=max(1, int(float(os.getenv("IMOU_VIEW_WAITKEY_MS", "1") or "1"))),
+        multi_tile_width=max(160, int(float(os.getenv("IMOU_MULTI_TILE_WIDTH", "480") or "480"))),
+        multi_tile_height=max(120, int(float(os.getenv("IMOU_MULTI_TILE_HEIGHT", "270") or "270"))),
         log_path=log_path,
         window_name=window_name,
     )

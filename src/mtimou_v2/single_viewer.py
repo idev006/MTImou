@@ -46,7 +46,7 @@ def run_single_camera(camera: CameraConfig, *, log_path, window_name: str) -> in
                     canvas = blank_canvas()
                     cv2.putText(canvas, "Reconnect failed. Press q to exit.", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2, cv2.LINE_AA)
                     cv2.imshow(settings.window_name, canvas)
-                    if (cv2.waitKey(250) & 0xFF) == ord("q"):
+                    if (cv2.waitKey(max(50, settings.wait_key_ms)) & 0xFF) == ord("q"):
                         break
                     continue
 
@@ -70,7 +70,7 @@ def run_single_camera(camera: CameraConfig, *, log_path, window_name: str) -> in
                 if idle >= settings.restart_idle_sec:
                     reopen_stream(state, settings, log, f"idle={idle:.1f}s", camera_count=1)
 
-            if (cv2.waitKey(20) & 0xFF) == ord("q"):
+            if (cv2.waitKey(settings.wait_key_ms) & 0xFF) == ord("q"):
                 break
     finally:
         if state.cap is not None:

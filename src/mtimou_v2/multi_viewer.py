@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 
 import cv2
@@ -15,6 +16,58 @@ from mtimou_v2.viewer_common import (
     overlay_style,
     reopen_stream,
 )
+
+
+class CameraWorker(threading.Thread):
+    def __init__(self, state, settings, log, *, camera_count: int) -> None:
+        super().__init__(daemon=True)
+        self.state = state
+        self.settings = settings
+        self.log = log
+        self.camera_count = camera_count
+        self.stop_event = threading.Event()
+
+    def run(self) -> None:
+        state = self.state
+        while not self.stop_event.is_set():
+            now = time.monotonic()
+            if not state.camera.password:
+                state.status_text = "missing password"
+                time.sleep(0.2)
+                continue
+
+            if (state.cap is None or not state.cap.isOpened()) and now >= state.next_retry_ts:
+                reopen_stream(state, self.settings, self.log, "capture-not-open", camera_count=self.camera_count)
+                if state.cap is None or not state.cap.isOpened():
+                    time.sleep(0.05)
+                    continue
+
+            ok = False
+            frame = None
+            if state.cap is not None and state.cap.isOpened():
+                ok, frame = state.cap.read()
+
+            now = time.monotonic()
+            if ok and frame is not None:
+                state.frame_count += 1
+                state.last_ok = now
+                state.last_frame = frame
+                state.status_text = "ok"
+                continue
+
+            idle = now - state.last_ok
+            if idle >= self.settings.restart_idle_sec and now >= state.next_retry_ts:
+                state.status_text = f"idle {idle:.1f}s"
+                reopen_stream(state, self.settings, self.log, f"idle={idle:.1f}s", camera_count=self.camera_count)
+            else:
+                state.status_text = f"waiting {idle:.1f}s"
+                time.sleep(0.01)
+
+        if state.cap is not None:
+            state.cap.release()
+
+    def stop(self) -> None:
+        self.stop_event.set()
 
 
 def run_multi_camera(camera_ids: list[str] | None, *, log_path, window_name: str) -> int:
@@ -35,6 +88,10 @@ def run_multi_camera(camera_ids: list[str] | None, *, log_path, window_name: str
     grid_cols = choose_grid_cols(len(states))
     log(f"[INFO] Grid layout cameras={len(states)} cols={grid_cols}")
 
+    workers = [CameraWorker(state, settings, log, camera_count=len(states)) for state in states]
+    for worker in workers:
+        worker.start()
+
     cv2.namedWindow(settings.window_name, cv2.WINDOW_NORMAL)
     started = time.monotonic()
 
@@ -48,48 +105,41 @@ def run_multi_camera(camera_ids: list[str] | None, *, log_path, window_name: str
             tiles = []
             for state in states:
                 if not state.camera.password:
-                    tile = blank_tile()
+                    tile = blank_tile(settings.multi_tile_width, settings.multi_tile_height)
                     cv2.putText(tile, f"{state.camera.camera_id}: missing password", (16, 56), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (0, 0, 255), style["title_thickness"], cv2.LINE_AA)
                     tiles.append(tile)
                     continue
 
-                if (state.cap is None or not state.cap.isOpened()) and now >= state.next_retry_ts:
-                    reopen_stream(state, settings, log, "capture-not-open", camera_count=len(states))
-
-                ok = False
-                frame = None
-                if state.cap is not None and state.cap.isOpened():
-                    ok, frame = state.cap.read()
-                now = time.monotonic()
-                if ok and frame is not None:
-                    state.frame_count += 1
-                    state.last_ok = now
-                    state.last_frame = frame
-                    state.status_text = "ok"
+                if state.last_frame is not None:
                     elapsed = max(now - state.started, 1e-6)
                     fps = state.frame_count / elapsed
-                    tile = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
+                    tile = cv2.resize(
+                        state.last_frame,
+                        (settings.multi_tile_width, settings.multi_tile_height),
+                        interpolation=cv2.INTER_LINEAR,
+                    )
                     cv2.putText(tile, f"{state.camera.name} [{state.mode}]", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (80, 255, 120), style["title_thickness"], cv2.LINE_AA)
                     cv2.putText(tile, f"frames={state.frame_count} fps~{fps:.1f}", (10, 46), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (255, 220, 80), style["meta_thickness"], cv2.LINE_AA)
                     cv2.putText(tile, f"reconnects={state.reconnects} failovers={state.failovers}", (10, 66), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (220, 220, 220), style["meta_thickness"], cv2.LINE_AA)
                 else:
                     idle = now - state.last_ok
-                    tile = blank_tile()
+                    tile = blank_tile(settings.multi_tile_width, settings.multi_tile_height)
                     cv2.putText(tile, f"{state.camera.name} [{state.mode}]", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (80, 255, 120), style["title_thickness"], cv2.LINE_AA)
                     cv2.putText(tile, f"No frame for {idle:.1f}s", (10, 54), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (0, 0, 255), style["title_thickness"], cv2.LINE_AA)
                     cv2.putText(tile, f"reconnects={state.reconnects} failovers={state.failovers}", (10, 76), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (220, 220, 220), style["meta_thickness"], cv2.LINE_AA)
                     if state.status_text:
                         cv2.putText(tile, f"status={state.status_text}", (10, 98), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (180, 180, 180), style["small_thickness"], cv2.LINE_AA)
-                    if idle >= settings.restart_idle_sec and now >= state.next_retry_ts:
-                        state.status_text = f"idle {idle:.1f}s"
-                        reopen_stream(state, settings, log, f"idle={idle:.1f}s", camera_count=len(states))
                 tiles.append(tile)
 
             grid = compose_grid(tiles, cols=grid_cols)
             cv2.imshow(settings.window_name, grid)
-            if (cv2.waitKey(20) & 0xFF) == ord("q"):
+            if (cv2.waitKey(settings.wait_key_ms) & 0xFF) == ord("q"):
                 break
     finally:
+        for worker in workers:
+            worker.stop()
+        for worker in workers:
+            worker.join(timeout=2.0)
         for state in states:
             if state.cap is not None:
                 state.cap.release()

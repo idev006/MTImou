@@ -42,6 +42,9 @@ class ViewerRuntimeSettings:
     preferred_mode: str
     remote_multi_subtype: str
     remote_single_subtype: str
+    wait_key_ms: int
+    multi_tile_width: int
+    multi_tile_height: int
     log_path: Path
     window_name: str
 

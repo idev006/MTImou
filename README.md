@@ -124,6 +124,7 @@ Notes:
 
 - Multi-camera remote viewing usually performs better with `subtype=1`
 - Single-camera remote viewing can stay on `subtype=0` for higher detail
+- Multi-camera viewing now uses parallel camera readers so one stream no longer drags the other down as much
 
 ## Public / Worldwide Access
 
