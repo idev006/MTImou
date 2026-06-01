@@ -37,7 +37,11 @@ The current UI release provides:
    - shared camera username
    - camera passwords generated dynamically from the current deployment
    - password visibility toggle
-5. Activity and guidance panels
+5. Camera inventory management
+   - editable inventory table backed by `cameras.json`
+   - add / remove / reload / save camera entries
+   - explicit password env mapping per camera
+6. Activity and guidance panels
    - recent command output
    - concise operator flow and target mode explanations
 
@@ -54,4 +58,4 @@ The current UI release provides:
 - Full router administration in the UI
 - Video embedding inside the control panel
 - Advanced recording/NVR workflows
-- Full camera CRUD management in this release
+- Full advanced validation wizard for camera onboarding

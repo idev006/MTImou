@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import os
-from dataclasses import replace
 from pathlib import Path
 
-from mtimou_v2.app_state import OperatorSettingsState
+from mtimou_v2.app_state import CameraEditorEntry, OperatorSettingsState
+from mtimou_v2.camera_config_store import CameraConfigDocument, CameraConfigStore
 from mtimou_v2.operator_services import OperatorServices
-from mtimou_v2.registry import enabled_cameras
+from mtimou_v2.registry import DEFAULT_CONFIG_PATH, default_password_env_names, enabled_cameras
 from mtimou_v2.settings_store import BatchEnvSettingsStore, SettingsDocument
 
 
@@ -15,12 +15,16 @@ class ControlPanelViewModel:
         self.root_dir = root_dir
         self.env_path = env_path
         self.store = BatchEnvSettingsStore(env_path)
+        self.camera_store = CameraConfigStore(DEFAULT_CONFIG_PATH)
         self.services = OperatorServices(root_dir)
         self.document: SettingsDocument | None = None
+        self.camera_document: CameraConfigDocument | None = None
         self.state = OperatorSettingsState()
 
     def load(self) -> OperatorSettingsState:
         self.document, self.state = self.store.load_state()
+        self.camera_document, entries = self.camera_store.load_entries()
+        self.state.camera_editor_entries = entries
         self._apply_env_values_to_process()
         return self.state
 
@@ -39,8 +43,43 @@ class ControlPanelViewModel:
             )
         self.document = self.store.save_document(self.document, updates)
         self.state = self.store.load_state()[1]
+        self.camera_document, entries = self.camera_store.load_entries()
+        self.state.camera_editor_entries = entries
         self._apply_env_values_to_process()
         return self.state
+
+    def save_camera_inventory(self, entries: list[CameraEditorEntry]) -> OperatorSettingsState:
+        if self.camera_document is None:
+            self.camera_document = CameraConfigDocument(raw={"cameras": []})
+        self.camera_document = self.camera_store.save_entries(self.camera_document, entries)
+        self.document, self.state = self.store.load_state()
+        self.camera_document, camera_entries = self.camera_store.load_entries()
+        self.state.camera_editor_entries = camera_entries
+        self._apply_env_values_to_process()
+        return self.state
+
+    def new_camera_entry(self, existing_ids: set[str]) -> CameraEditorEntry:
+        index = 1
+        while f"cam{index}" in existing_ids:
+            index += 1
+        camera_id = f"cam{index}"
+        password_env = default_password_env_names(camera_id)[0]
+        return CameraEditorEntry(
+            camera_id=camera_id,
+            name=f"Camera {index}",
+            lan_host="192.168.1.10",
+            lan_port=554,
+            ddns_host=self.state.ddns_host.strip(),
+            ddns_port=45553 + index,
+            public_host="125.27.213.148",
+            public_port=45553 + index,
+            channel="1",
+            subtype="0",
+            transport="tcp",
+            enabled=True,
+            username_env="IMOU_CAMERA_USERNAME",
+            password_env_name=password_env,
+        )
 
     def launch_selected(self, camera_ids: list[str]) -> tuple[str, str]:
         if len(camera_ids) == 1:

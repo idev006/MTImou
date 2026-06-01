@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
+    QTableWidgetSelectionRange,
     QPushButton,
     QSizePolicy,
     QStatusBar,
@@ -43,6 +44,18 @@ ENV_PATH = ROOT_DIR / "camera.env.bat"
 WINDOW_TITLE = "MTImou Control Panel"
 MODE_OPTIONS = ["auto", "lan", "ddns", "public"]
 TABLE_COLUMNS = ["Camera", "LAN", "DDNS", "Public", "Status"]
+INVENTORY_COLUMNS = [
+    "Enabled",
+    "ID",
+    "Name",
+    "LAN Host",
+    "LAN Port",
+    "DDNS Host",
+    "DDNS Port",
+    "Public Host",
+    "Public Port",
+    "Password Env",
+]
 
 
 @dataclass(slots=True)
@@ -100,7 +113,9 @@ class ControlPanelWindow(QMainWindow):
 
         self.mode_combo = QComboBox()
         self.mode_combo.addItems(MODE_OPTIONS)
+        self.mode_combo.currentTextChanged.connect(lambda _value: self._update_metric_cards())
         self.ddns_edit = QLineEdit()
+        self.ddns_edit.textChanged.connect(lambda _value: self._update_metric_cards())
         self.user_edit = QLineEdit()
         self.show_passwords_checkbox = QCheckBox("Show passwords")
         self.show_passwords_checkbox.toggled.connect(self.toggle_password_visibility)
@@ -125,6 +140,12 @@ class ControlPanelWindow(QMainWindow):
         self.selection_summary.setObjectName("selectionSummary")
 
         self.password_fields: list[PasswordField] = []
+        self.inventory_table = QTableWidget(0, len(INVENTORY_COLUMNS))
+        self.inventory_table.setHorizontalHeaderLabels(INVENTORY_COLUMNS)
+        self.inventory_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.inventory_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.inventory_table.setAlternatingRowColors(True)
+        self.inventory_table.verticalHeader().setVisible(False)
         self.password_rows_host = QWidget()
         self.password_rows_layout = QVBoxLayout(self.password_rows_host)
         self.password_rows_layout.setContentsMargins(0, 0, 0, 0)
@@ -278,6 +299,7 @@ class ControlPanelWindow(QMainWindow):
         tabs = QTabWidget()
         tabs.addTab(self._build_dashboard_tab(), "Dashboard")
         tabs.addTab(self._build_settings_tab(), "Settings")
+        tabs.addTab(self._build_camera_management_tab(), "Camera Management")
         tabs.addTab(self._build_help_tab(), "Operator Guide")
         root_layout.addWidget(tabs, 1)
 
@@ -419,6 +441,66 @@ class ControlPanelWindow(QMainWindow):
         layout.addStretch(1)
         return tab
 
+    def _build_camera_management_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(14)
+
+        box = QGroupBox("Camera Inventory")
+        box_layout = QVBoxLayout(box)
+
+        helper = QLabel(
+            "Manage N cameras here. Edit network endpoints, enable or disable cameras, and define the password environment key for each camera."
+        )
+        helper.setWordWrap(True)
+        helper.setStyleSheet("color: #5b6472; font-size: 12px;")
+        box_layout.addWidget(helper)
+
+        inventory_header = self.inventory_table.horizontalHeader()
+        inventory_header.setStretchLastSection(False)
+        inventory_header.setSectionResizeMode(2, QHeaderView.Stretch)
+        self.inventory_table.setColumnWidth(0, 80)
+        self.inventory_table.setColumnWidth(1, 90)
+        self.inventory_table.setColumnWidth(3, 130)
+        self.inventory_table.setColumnWidth(4, 80)
+        self.inventory_table.setColumnWidth(5, 210)
+        self.inventory_table.setColumnWidth(6, 90)
+        self.inventory_table.setColumnWidth(7, 130)
+        self.inventory_table.setColumnWidth(8, 90)
+        self.inventory_table.setColumnWidth(9, 180)
+        box_layout.addWidget(self.inventory_table, 1)
+
+        actions = QHBoxLayout()
+        btn_add = QPushButton("Add Camera")
+        btn_add.clicked.connect(self.add_camera_inventory_row)
+        btn_remove = QPushButton("Remove Selected")
+        btn_remove.clicked.connect(self.remove_selected_inventory_rows)
+        btn_reload = QPushButton("Reload Inventory")
+        btn_reload.clicked.connect(self.reload_settings)
+        btn_save = QPushButton("Save Camera Inventory")
+        btn_save.setObjectName("primary")
+        btn_save.clicked.connect(self.save_camera_inventory)
+        actions.addWidget(btn_add)
+        actions.addWidget(btn_remove)
+        actions.addWidget(btn_reload)
+        actions.addStretch(1)
+        actions.addWidget(btn_save)
+        box_layout.addLayout(actions)
+
+        notes_box = QGroupBox("Inventory Notes")
+        notes_layout = QVBoxLayout(notes_box)
+        notes_text = QLabel(
+            "Use one public port per camera. A typical pattern is 45554, 45555, 45556, and so on.\n\n"
+            "Password Env should match the environment variable in camera.env.bat, for example IMOU_CAM_CAM3_PASSWORD."
+        )
+        notes_text.setWordWrap(True)
+        notes_layout.addWidget(notes_text)
+
+        layout.addWidget(box, 1)
+        layout.addWidget(notes_box)
+        return tab
+
     def _build_help_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -534,6 +616,7 @@ class ControlPanelWindow(QMainWindow):
                 item.setData(Qt.UserRole, row.camera_id)
                 if col_index == 4:
                     item.setTextAlignment(Qt.AlignCenter)
+                    item.setForeground(Qt.darkGreen if row.enabled else Qt.darkRed)
                 if col_index == 0 and row.enabled:
                     item.setForeground(Qt.darkGreen)
                 self.camera_table.setItem(row_index, col_index, item)
@@ -542,6 +625,86 @@ class ControlPanelWindow(QMainWindow):
 
         self.camera_table.resizeRowsToContents()
         self._refresh_selection_summary()
+
+    def _refresh_inventory_table(self) -> None:
+        entries = self.vm.state.camera_editor_entries
+        self.inventory_table.setRowCount(len(entries))
+        for row_index, entry in enumerate(entries):
+            enabled_item = QTableWidgetItem("Yes" if entry.enabled else "No")
+            enabled_item.setFlags(enabled_item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable)
+            enabled_item.setCheckState(Qt.Checked if entry.enabled else Qt.Unchecked)
+            enabled_item.setTextAlignment(Qt.AlignCenter)
+            self.inventory_table.setItem(row_index, 0, enabled_item)
+
+            values = [
+                entry.camera_id,
+                entry.name,
+                entry.lan_host,
+                str(entry.lan_port),
+                entry.ddns_host,
+                str(entry.ddns_port),
+                entry.public_host,
+                str(entry.public_port),
+                entry.password_env_name,
+            ]
+            for offset, value in enumerate(values, start=1):
+                item = QTableWidgetItem(value)
+                self.inventory_table.setItem(row_index, offset, item)
+        self.inventory_table.resizeRowsToContents()
+
+    def _inventory_row_to_entry(self, row: int):
+        from mtimou_v2.app_state import CameraEditorEntry
+
+        enabled_item = self.inventory_table.item(row, 0)
+        camera_id_item = self.inventory_table.item(row, 1)
+        name_item = self.inventory_table.item(row, 2)
+        lan_host_item = self.inventory_table.item(row, 3)
+        lan_port_item = self.inventory_table.item(row, 4)
+        ddns_host_item = self.inventory_table.item(row, 5)
+        ddns_port_item = self.inventory_table.item(row, 6)
+        public_host_item = self.inventory_table.item(row, 7)
+        public_port_item = self.inventory_table.item(row, 8)
+        password_env_item = self.inventory_table.item(row, 9)
+
+        camera_id = (camera_id_item.text() if camera_id_item else "").strip()
+        name = (name_item.text() if name_item else "").strip()
+        lan_host = (lan_host_item.text() if lan_host_item else "").strip()
+        ddns_host = (ddns_host_item.text() if ddns_host_item else "").strip()
+        public_host = (public_host_item.text() if public_host_item else "").strip()
+        password_env = (password_env_item.text() if password_env_item else "").strip()
+
+        if not camera_id:
+            raise ValueError(f"Row {row + 1}: Camera ID is required.")
+        if not lan_host:
+            raise ValueError(f"Row {row + 1}: LAN host is required.")
+        if not public_host:
+            raise ValueError(f"Row {row + 1}: Public host is required.")
+        if not password_env:
+            raise ValueError(f"Row {row + 1}: Password env is required.")
+
+        try:
+            lan_port = int((lan_port_item.text() if lan_port_item else "554").strip())
+            ddns_port = int((ddns_port_item.text() if ddns_port_item else "45554").strip())
+            public_port = int((public_port_item.text() if public_port_item else "45554").strip())
+        except ValueError as exc:
+            raise ValueError(f"Row {row + 1}: ports must be integers.") from exc
+
+        return CameraEditorEntry(
+            camera_id=camera_id,
+            name=name or camera_id,
+            lan_host=lan_host,
+            lan_port=lan_port,
+            ddns_host=ddns_host,
+            ddns_port=ddns_port,
+            public_host=public_host,
+            public_port=public_port,
+            channel="1",
+            subtype="0",
+            transport="tcp",
+            enabled=enabled_item.checkState() == Qt.Checked if enabled_item else True,
+            username_env="IMOU_CAMERA_USERNAME",
+            password_env_name=password_env,
+        )
 
     def _refresh_selection_summary(self) -> None:
         rows = self.selected_camera_rows()
@@ -607,6 +770,44 @@ class ControlPanelWindow(QMainWindow):
         ddns_value = self.ddns_edit.text().strip() or "Not set"
         self.metric_ddns.set_value(ddns_value, "Used when remote access needs a stable hostname")
 
+    def add_camera_inventory_row(self) -> None:
+        existing_ids = set()
+        for row in range(self.inventory_table.rowCount()):
+            item = self.inventory_table.item(row, 1)
+            if item and item.text().strip():
+                existing_ids.add(item.text().strip())
+        entry = self.vm.new_camera_entry(existing_ids)
+        self.vm.state.camera_editor_entries.append(entry)
+        self._refresh_inventory_table()
+        self.append_output(f"[INFO] Added draft camera row for {entry.camera_id}")
+
+    def remove_selected_inventory_rows(self) -> None:
+        selected_rows = sorted({item.row() for item in self.inventory_table.selectedItems()}, reverse=True)
+        if not selected_rows:
+            QMessageBox.information(self, WINDOW_TITLE, "Select one or more inventory rows to remove.")
+            return
+        for row in selected_rows:
+            del self.vm.state.camera_editor_entries[row]
+        self._refresh_inventory_table()
+        self.append_output(f"[INFO] Removed {len(selected_rows)} draft camera row(s)")
+
+    def save_camera_inventory(self) -> None:
+        entries = []
+        try:
+            for row in range(self.inventory_table.rowCount()):
+                entries.append(self._inventory_row_to_entry(row))
+        except ValueError as exc:
+            QMessageBox.warning(self, WINDOW_TITLE, str(exc))
+            return
+
+        self.vm.save_camera_inventory(entries)
+        self._rebuild_password_fields()
+        self._refresh_camera_table()
+        self._refresh_inventory_table()
+        self._update_metric_cards()
+        self.append_output("[INFO] Saved camera inventory to cameras.json")
+        self._set_status("Saved camera inventory")
+
     def save_settings(self) -> None:
         new_state = OperatorSettingsState(
             target_mode=self.mode_combo.currentText().strip() or "auto",
@@ -637,6 +838,7 @@ class ControlPanelWindow(QMainWindow):
         self.user_edit.setText(self.vm.state.username or "admin")
         self._rebuild_password_fields()
         self._refresh_camera_table()
+        self._refresh_inventory_table()
         self._update_metric_cards()
         self.append_output("[INFO] Reloaded settings from camera.env.bat")
         self._set_status("Reloaded settings")

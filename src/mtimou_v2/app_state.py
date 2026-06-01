@@ -20,11 +20,29 @@ class PasswordEntry:
 
 
 @dataclass(slots=True)
+class CameraEditorEntry:
+    camera_id: str
+    name: str
+    lan_host: str
+    lan_port: int
+    ddns_host: str
+    ddns_port: int
+    public_host: str
+    public_port: int
+    channel: str
+    subtype: str
+    transport: str
+    enabled: bool
+    username_env: str
+    password_env_name: str
+
+
+@dataclass(slots=True)
 class OperatorSettingsState:
     target_mode: str = "auto"
     ddns_host: str = ""
     username: str = "admin"
     password_entries: list[PasswordEntry] = field(default_factory=list)
     cameras: list[CameraListItem] = field(default_factory=list)
+    camera_editor_entries: list[CameraEditorEntry] = field(default_factory=list)
     output_lines: list[str] = field(default_factory=list)
-
