@@ -13,6 +13,7 @@ if str(THIS_DIR) not in sys.path:
 from PySide6.QtCore import QProcess, Qt
 from PySide6.QtGui import QAction, QTextCursor
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -186,7 +187,7 @@ class ControlPanelWindow(QMainWindow):
 
         camera_box = QGroupBox("Cameras")
         camera_layout = QVBoxLayout(camera_box)
-        self.camera_list.setSelectionMode(QListWidget.SingleSelection)
+        self.camera_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.camera_list.setAlternatingRowColors(True)
         camera_layout.addWidget(self.camera_list)
         layout.addWidget(camera_box, 2)
@@ -214,8 +215,8 @@ class ControlPanelWindow(QMainWindow):
         action_layout = QVBoxLayout(action_box)
         action_layout.setSpacing(8)
 
-        btn_selected = QPushButton("View Selected Camera")
-        btn_selected.clicked.connect(self.launch_selected_camera)
+        btn_selected = QPushButton("View Selected Cameras")
+        btn_selected.clicked.connect(self.launch_selected_cameras)
         btn_all = QPushButton("View All Enabled Cameras")
         btn_all.clicked.connect(self.launch_all_cameras)
         btn_health = QPushButton("Run Health Check")
@@ -287,23 +288,22 @@ class ControlPanelWindow(QMainWindow):
 
     def _refresh_camera_list(self) -> None:
         rows = self._load_camera_rows()
-        current_id = self.selected_camera_id()
+        current_ids = set(self.selected_camera_ids())
         self.camera_list.clear()
-        selected_row = 0
         for index, row in enumerate(rows):
             item = QListWidgetItem(row.label)
             item.setData(Qt.UserRole, row.camera_id)
             self.camera_list.addItem(item)
-            if row.camera_id == current_id:
-                selected_row = index
-        if self.camera_list.count():
-            self.camera_list.setCurrentRow(selected_row)
+            if row.camera_id in current_ids:
+                item.setSelected(True)
+        if self.camera_list.count() and not current_ids:
+            self.camera_list.item(0).setSelected(True)
 
-    def selected_camera_id(self) -> str | None:
-        item = self.camera_list.currentItem()
-        if item is None:
-            return None
-        return str(item.data(Qt.UserRole))
+    def selected_camera_ids(self) -> list[str]:
+        ids: list[str] = []
+        for item in self.camera_list.selectedItems():
+            ids.append(str(item.data(Qt.UserRole)))
+        return ids
 
     def save_settings(self) -> None:
         updates = {
@@ -338,15 +338,20 @@ class ControlPanelWindow(QMainWindow):
         self.append_output("[INFO] Reloaded settings from camera.env.bat")
         self._set_status("Reloaded settings")
 
-    def launch_selected_camera(self) -> None:
-        camera_id = self.selected_camera_id()
-        if not camera_id:
-            QMessageBox.warning(self, WINDOW_TITLE, "Please select a camera first.")
+    def launch_selected_cameras(self) -> None:
+        camera_ids = self.selected_camera_ids()
+        if not camera_ids:
+            QMessageBox.warning(self, WINDOW_TITLE, "Please select one or more cameras first.")
             return
         self.save_settings()
-        launch_batch("run_camera_stable.bat", [camera_id])
-        self.append_output(f"[INFO] Launched run_camera_stable.bat {camera_id}")
-        self._set_status(f"Launched camera viewer for {camera_id}")
+        if len(camera_ids) == 1:
+            launch_batch("run_camera_stable.bat", [camera_ids[0]])
+            self.append_output(f"[INFO] Launched run_camera_stable.bat {camera_ids[0]}")
+            self._set_status(f"Launched camera viewer for {camera_ids[0]}")
+            return
+        launch_batch("run_multi_camera_stable.bat", camera_ids)
+        self.append_output(f"[INFO] Launched run_multi_camera_stable.bat {' '.join(camera_ids)}")
+        self._set_status(f"Launched selected cameras: {', '.join(camera_ids)}")
 
     def launch_all_cameras(self) -> None:
         self.save_settings()

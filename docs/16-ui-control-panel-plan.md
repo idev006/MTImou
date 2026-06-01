@@ -9,8 +9,8 @@ Provide a simple desktop UI so an operator can use MTImou without editing batch 
 1. Operators should not need to remember `run_*.bat` commands
 2. Operators should not need to edit `camera.env.bat` manually for common settings
 3. Operators need one obvious place to:
-   - launch a single camera
-   - launch multi-camera view
+   - launch one or more selected cameras
+   - launch all enabled cameras
    - choose target mode
    - run health checks
    - inspect last results
@@ -20,9 +20,10 @@ Provide a simple desktop UI so an operator can use MTImou without editing batch 
 The first UI release will provide:
 
 1. Camera list with names and current targets
+   - supports multi-select for launching a chosen subset
 2. Mode selector: `auto`, `lan`, `ddns`, `public`
 3. Buttons:
-   - view selected camera
+   - view selected camera(s)
    - view all enabled cameras
    - run health check
 4. Settings fields:
