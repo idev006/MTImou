@@ -40,3 +40,9 @@ Current operator-facing entrypoints:
 - Lock architecture decisions in ADRs.
 - Deliver incrementally by milestones with entry/exit criteria.
 - Operate via SLOs, observability, and incident playbooks.
+
+## Legacy Note
+
+Historical relay-era and spike tools have been moved under [`../legacy`](../legacy).
+Some older historical documents may still describe those archived paths because
+they document earlier project phases rather than the current production runtime.

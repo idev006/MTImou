@@ -145,9 +145,6 @@ Important note:
   - Multi-camera tiled viewer
 - [`src/camera_registry.py`](./src/camera_registry.py)
   - Camera config loading and target selection
-- [`src/router_live_control.py`](./src/router_live_control.py)
-  - Browser-driven router helper used during setup and port-forward work
-
 ## Logs
 
 - Single camera:
@@ -191,6 +188,12 @@ Operational and architecture documents live in [`docs`](./docs):
 - [`docs/19-actors-usecases-sequences.md`](./docs/19-actors-usecases-sequences.md)
 - [`docs/20-ui-mvvm-ssot-architecture.md`](./docs/20-ui-mvvm-ssot-architecture.md)
 - [`docs/21-robustness-process-engineering.md`](./docs/21-robustness-process-engineering.md)
+
+## Legacy Archive
+
+Historical relay-era, Rust probe, OpenAPI spike, and troubleshooting scripts have
+been moved to [`legacy`](./legacy). They are preserved for reference, but they
+are no longer part of the supported production runtime path.
 
 ## Roadmap
 
