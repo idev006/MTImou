@@ -67,6 +67,25 @@ def _resolve_password(item: dict) -> str:
     return item.get("password", "").strip()
 
 
+def _resolve_ddns_host(item: dict) -> str:
+    direct_value = str(item.get("ddns_host", "")).strip()
+    if direct_value:
+        return direct_value
+
+    env_names: list[str] = []
+    single_env = str(item.get("ddns_host_env", "")).strip()
+    if single_env:
+        env_names.append(single_env)
+    env_names.extend(str(name).strip() for name in item.get("ddns_host_envs", []) if str(name).strip())
+    env_names.extend(["IMOU_CAMERA_DDNS_HOST", "IMOU_DDNS_HOST"])
+
+    for env_name in env_names:
+        value = os.getenv(env_name, "").strip()
+        if value:
+            return value
+    return ""
+
+
 def load_cameras(config_path: Path | None = None) -> list[CameraConfig]:
     raw = _load_raw_config(config_path)
     cameras: list[CameraConfig] = []
@@ -77,7 +96,7 @@ def load_cameras(config_path: Path | None = None) -> list[CameraConfig]:
                 name=str(item.get("name", item["id"])),
                 lan_host=str(item["lan_host"]),
                 lan_port=int(item.get("lan_port", 554)),
-                ddns_host=str(item.get("ddns_host", "")).strip(),
+                ddns_host=_resolve_ddns_host(item),
                 ddns_port=int(item.get("ddns_port", item.get("public_port", 45554))),
                 public_host=str(item["public_host"]),
                 public_port=int(item.get("public_port", 45554)),

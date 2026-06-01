@@ -28,6 +28,19 @@ cd /d F:\programming\python\MTImou
 run_multi_camera_stable.bat cam1 cam2
 ```
 
+Grid behavior:
+
+- `1 camera` -> `1x1`
+- `2 cameras` -> `1x2`
+- `3-4 cameras` -> `2x2`
+- `5-9 cameras` -> `3x3`
+
+Optional manual override:
+
+```bat
+set IMOU_MULTI_GRID_COLS=2
+```
+
 ## Current Mapping
 
 - `cam1` / `Front House`
@@ -41,6 +54,13 @@ run_multi_camera_stable.bat cam1 cam2
 
 - Works now through `public` mode because both forwarded ports are live.
 - If the home's public IP changes after an ISP reconnect, set `ddns_host` in `cameras.json` and use `IMOU_TARGET_MODE=ddns` or leave `auto`.
+- You can also set one shared env hostname for the whole house:
+
+```bat
+set IMOU_DDNS_HOST=YOUR-HOSTNAME.ddns.net
+```
+
+- In that model, each camera still uses its own forwarded port.
 
 ## Logs
 

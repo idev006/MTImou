@@ -81,6 +81,23 @@ def build_state(camera: CameraConfig) -> StreamState:
     )
 
 
+def choose_grid_cols(camera_count: int) -> int:
+    override = os.getenv("IMOU_MULTI_GRID_COLS", "auto").strip().lower()
+    if override and override != "auto":
+        try:
+            return max(1, int(override))
+        except ValueError:
+            pass
+
+    if camera_count <= 1:
+        return 1
+    if camera_count <= 4:
+        return 2
+    if camera_count <= 9:
+        return 3
+    return max(1, math.ceil(math.sqrt(camera_count)))
+
+
 def compose_grid(frames: list[np.ndarray], cols: int = 2) -> np.ndarray:
     rows = math.ceil(len(frames) / cols)
     height = max(frame.shape[0] for frame in frames)
@@ -121,6 +138,8 @@ def main() -> int:
     states = [build_state(camera) for camera in cameras]
     for state in states:
         log(f"[INFO] Camera={state.camera.camera_id} mode={state.mode} target={state.host}:{state.port} url={state.safe_url}")
+    grid_cols = choose_grid_cols(len(states))
+    log(f"[INFO] Grid layout cameras={len(states)} cols={grid_cols}")
 
     window_name = os.getenv("IMOU_MULTI_WINDOW_NAME", "IMOU Multi Camera")
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -187,7 +206,7 @@ def main() -> int:
                         reopen(state, f"idle={idle:.1f}s")
                 tiles.append(tile)
 
-            grid = compose_grid(tiles, cols=2)
+            grid = compose_grid(tiles, cols=grid_cols)
             cv2.imshow(window_name, grid)
             if (cv2.waitKey(20) & 0xFF) == ord("q"):
                 break

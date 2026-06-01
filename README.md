@@ -45,6 +45,13 @@ cd /d F:\programming\python\MTImou
 run_multi_camera_stable.bat cam1 cam2
 ```
 
+Grid behavior:
+
+- `1 camera` -> `1x1`
+- `2 cameras` -> `1x2`
+- `3-4 cameras` -> `2x2`
+- `5-9 cameras` -> `3x3`
+
 Backward-compatible default:
 
 ```bat
@@ -60,6 +67,12 @@ Supported values:
 - `lan`: force local RTSP
 - `ddns`: force DDNS hostname target
 - `public`: force public IP/port target
+
+Optional shared DDNS hostname for the whole house:
+
+```bat
+set IMOU_DDNS_HOST=YOUR-HOSTNAME.ddns.net
+```
 
 Example:
 
