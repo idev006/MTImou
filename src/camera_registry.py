@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,8 +60,32 @@ def _resolve_username(item: dict) -> str:
     return os.getenv(env_name, "admin").strip() or "admin"
 
 
+def default_password_env_names(camera_id: str) -> list[str]:
+    normalized = re.sub(r"[^A-Za-z0-9]+", "_", camera_id.strip()).upper()
+    names = [f"IMOU_CAM_{normalized}_PASSWORD"]
+    match = re.search(r"(\d+)$", camera_id.strip().lower())
+    if match:
+        index = int(match.group(1))
+        if index <= 1:
+            names.append("IMOU_CAMERA_PASSWORD")
+        else:
+            names.append(f"IMOU_CAMERA{index}_PASSWORD")
+    names.append("IMOU_CAMERA_PASSWORD")
+    deduped: list[str] = []
+    for name in names:
+        if name and name not in deduped:
+            deduped.append(name)
+    return deduped
+
+
 def _resolve_password(item: dict) -> str:
-    for env_name in item.get("password_envs", []):
+    env_names = [str(name).strip() for name in item.get("password_envs", []) if str(name).strip()]
+    env_names.extend(default_password_env_names(str(item.get("id", ""))))
+    seen: set[str] = set()
+    for env_name in env_names:
+        if env_name in seen:
+            continue
+        seen.add(env_name)
         value = os.getenv(env_name, "").strip()
         if value:
             return value

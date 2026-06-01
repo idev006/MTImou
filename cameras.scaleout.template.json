@@ -13,7 +13,7 @@
       "subtype": "0",
       "transport": "tcp",
       "username_env": "IMOU_CAMERA_USERNAME",
-      "password_envs": ["IMOU_CAMERA3_PASSWORD", "IMOU_CAMERA_PASSWORD"],
+      "password_envs": ["IMOU_CAM_CAM3_PASSWORD", "IMOU_CAMERA_PASSWORD"],
       "enabled": false
     },
     {
@@ -29,7 +29,7 @@
       "subtype": "0",
       "transport": "tcp",
       "username_env": "IMOU_CAMERA_USERNAME",
-      "password_envs": ["IMOU_CAMERA4_PASSWORD", "IMOU_CAMERA_PASSWORD"],
+      "password_envs": ["IMOU_CAM_CAM4_PASSWORD", "IMOU_CAMERA_PASSWORD"],
       "enabled": false
     }
   ]

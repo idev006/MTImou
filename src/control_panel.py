@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from camera_registry import enabled_cameras, load_cameras, target_modes_summary
+from camera_registry import default_password_env_names, enabled_cameras, load_cameras, target_modes_summary
 from venv_guard import enforce_venv_python
 
 
@@ -98,6 +98,13 @@ class CameraRow:
     label: str
 
 
+@dataclass(slots=True)
+class PasswordField:
+    camera_id: str
+    env_name: str
+    edit: QLineEdit
+
+
 class ControlPanelWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -112,10 +119,6 @@ class ControlPanelWindow(QMainWindow):
         self.mode_combo.addItems(MODE_OPTIONS)
         self.ddns_edit = QLineEdit()
         self.user_edit = QLineEdit()
-        self.pass1_edit = QLineEdit()
-        self.pass2_edit = QLineEdit()
-        self.pass1_edit.setEchoMode(QLineEdit.Password)
-        self.pass2_edit.setEchoMode(QLineEdit.Password)
         self.show_passwords_checkbox = QCheckBox("Show passwords")
         self.show_passwords_checkbox.toggled.connect(self.toggle_password_visibility)
         self.open_log_checkbox = QCheckBox("Open logs folder after health check")
@@ -123,6 +126,11 @@ class ControlPanelWindow(QMainWindow):
         self.camera_list = QListWidget()
         self.output = QPlainTextEdit()
         self.output.setReadOnly(True)
+        self.password_fields: list[PasswordField] = []
+        self.password_rows_host = QWidget()
+        self.password_rows_layout = QVBoxLayout(self.password_rows_host)
+        self.password_rows_layout.setContentsMargins(0, 0, 0, 0)
+        self.password_rows_layout.setSpacing(6)
 
         self._build_ui()
         self.reload_settings()
@@ -201,8 +209,7 @@ class ControlPanelWindow(QMainWindow):
         settings_layout.addRow("Target mode", self.mode_combo)
         settings_layout.addRow("Shared DDNS host", self.ddns_edit)
         settings_layout.addRow("Camera username", self.user_edit)
-        settings_layout.addRow("Camera 1 password", self.pass1_edit)
-        settings_layout.addRow("Camera 2 password", self.pass2_edit)
+        settings_layout.addRow("Camera passwords", self.password_rows_host)
         settings_layout.addRow("", self.show_passwords_checkbox)
         layout.addWidget(settings_box, 1)
 
@@ -289,6 +296,45 @@ class ControlPanelWindow(QMainWindow):
             )
         return rows
 
+    def _rebuild_password_fields(self) -> None:
+        while self.password_rows_layout.count():
+            item = self.password_rows_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self.password_fields.clear()
+
+        for camera in load_cameras():
+            env_names = default_password_env_names(camera.camera_id)
+            primary_env = env_names[0]
+            value = ""
+            for env_name in env_names:
+                value = self.env_values.get(env_name, "")
+                if value:
+                    break
+
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(8)
+
+            label = QLabel(f"{camera.name} ({camera.camera_id})")
+            label.setMinimumWidth(190)
+            edit = QLineEdit()
+            edit.setPlaceholderText(primary_env)
+            edit.setText(value)
+            edit.setEchoMode(QLineEdit.Normal if self.show_passwords_checkbox.isChecked() else QLineEdit.Password)
+            hint = QLabel(primary_env)
+            hint.setStyleSheet("color: #777; font-size: 11px;")
+
+            row_layout.addWidget(label)
+            row_layout.addWidget(edit, 1)
+            row_layout.addWidget(hint)
+            self.password_rows_layout.addWidget(row)
+            self.password_fields.append(PasswordField(camera_id=camera.camera_id, env_name=primary_env, edit=edit))
+
+        self.password_rows_layout.addStretch(1)
+
     def _refresh_camera_list(self) -> None:
         rows = self._load_camera_rows()
         current_ids = set(self.selected_camera_ids())
@@ -310,17 +356,17 @@ class ControlPanelWindow(QMainWindow):
 
     def toggle_password_visibility(self, visible: bool) -> None:
         mode = QLineEdit.Normal if visible else QLineEdit.Password
-        self.pass1_edit.setEchoMode(mode)
-        self.pass2_edit.setEchoMode(mode)
+        for field in self.password_fields:
+            field.edit.setEchoMode(mode)
 
     def save_settings(self) -> None:
         updates = {
             "IMOU_TARGET_MODE": self.mode_combo.currentText().strip() or "auto",
             "IMOU_DDNS_HOST": self.ddns_edit.text().strip(),
             "IMOU_CAMERA_USERNAME": self.user_edit.text().strip() or "admin",
-            "IMOU_CAMERA_PASSWORD": self.pass1_edit.text().strip(),
-            "IMOU_CAMERA2_PASSWORD": self.pass2_edit.text().strip(),
         }
+        for field in self.password_fields:
+            updates[field.env_name] = field.edit.text().strip()
         if not ENV_PATH.exists():
             self.env_lines = [
                 "@echo off",
@@ -340,8 +386,7 @@ class ControlPanelWindow(QMainWindow):
         self.mode_combo.setCurrentText(self.env_values.get("IMOU_TARGET_MODE", "auto") or "auto")
         self.ddns_edit.setText(self.env_values.get("IMOU_DDNS_HOST", ""))
         self.user_edit.setText(self.env_values.get("IMOU_CAMERA_USERNAME", "admin") or "admin")
-        self.pass1_edit.setText(self.env_values.get("IMOU_CAMERA_PASSWORD", ""))
-        self.pass2_edit.setText(self.env_values.get("IMOU_CAMERA2_PASSWORD", ""))
+        self._rebuild_password_fields()
         self._refresh_camera_list()
         self.append_output("[INFO] Reloaded settings from camera.env.bat")
         self._set_status("Reloaded settings")

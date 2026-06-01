@@ -45,8 +45,8 @@ Create one port-forward rule per camera:
 Add per-camera passwords to `camera.env.bat`:
 
 ```bat
-set IMOU_CAMERA3_PASSWORD=YOUR_THIRD_CAMERA_PASSWORD
-set IMOU_CAMERA4_PASSWORD=YOUR_FOURTH_CAMERA_PASSWORD
+set IMOU_CAM_CAM3_PASSWORD=YOUR_THIRD_CAMERA_PASSWORD
+set IMOU_CAM_CAM4_PASSWORD=YOUR_FOURTH_CAMERA_PASSWORD
 ```
 
 ## Registry Work
@@ -67,7 +67,7 @@ Add entries like these to `cameras.json`:
   "subtype": "0",
   "transport": "tcp",
   "username_env": "IMOU_CAMERA_USERNAME",
-  "password_envs": ["IMOU_CAMERA3_PASSWORD", "IMOU_CAMERA_PASSWORD"],
+  "password_envs": ["IMOU_CAM_CAM3_PASSWORD", "IMOU_CAMERA_PASSWORD"],
   "enabled": true
 }
 ```
@@ -86,7 +86,7 @@ Add entries like these to `cameras.json`:
   "subtype": "0",
   "transport": "tcp",
   "username_env": "IMOU_CAMERA_USERNAME",
-  "password_envs": ["IMOU_CAMERA4_PASSWORD", "IMOU_CAMERA_PASSWORD"],
+  "password_envs": ["IMOU_CAM_CAM4_PASSWORD", "IMOU_CAMERA_PASSWORD"],
   "enabled": true
 }
 ```
