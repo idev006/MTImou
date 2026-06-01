@@ -1,0 +1,32 @@
+{
+  "cameras": [
+    {
+      "id": "cam1",
+      "name": "Camera 1",
+      "lan_host": "192.168.1.2",
+      "lan_port": 554,
+      "public_host": "125.27.213.148",
+      "public_port": 45554,
+      "channel": "1",
+      "subtype": "0",
+      "transport": "tcp",
+      "username_env": "IMOU_CAMERA_USERNAME",
+      "password_envs": ["IMOU_CAMERA_PASSWORD"],
+      "enabled": true
+    },
+    {
+      "id": "cam2",
+      "name": "Camera 2",
+      "lan_host": "192.168.1.5",
+      "lan_port": 554,
+      "public_host": "125.27.213.148",
+      "public_port": 45555,
+      "channel": "1",
+      "subtype": "0",
+      "transport": "tcp",
+      "username_env": "IMOU_CAMERA_USERNAME",
+      "password_envs": ["IMOU_CAMERA2_PASSWORD", "IMOU_CAMERA_PASSWORD"],
+      "enabled": true
+    }
+  ]
+}
