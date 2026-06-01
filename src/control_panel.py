@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -26,6 +29,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStatusBar,
+    QSpinBox,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -101,6 +105,74 @@ class MetricCard(QFrame):
         self.helper_label.setText(helper)
 
 
+class CameraWizardDialog(QDialog):
+    def __init__(self, *, next_camera_id: str, ddns_host: str, public_host: str, public_port: int, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Add Camera Wizard")
+        self.setModal(True)
+        self.resize(520, 420)
+
+        self.id_edit = QLineEdit(next_camera_id)
+        self.name_edit = QLineEdit(f"Camera {re.sub(r'[^0-9]+', '', next_camera_id) or next_camera_id}")
+        self.lan_host_edit = QLineEdit("192.168.1.10")
+        self.lan_port_spin = QSpinBox()
+        self.lan_port_spin.setRange(1, 65535)
+        self.lan_port_spin.setValue(554)
+        self.ddns_host_edit = QLineEdit(ddns_host)
+        self.ddns_port_spin = QSpinBox()
+        self.ddns_port_spin.setRange(1, 65535)
+        self.ddns_port_spin.setValue(public_port)
+        self.public_host_edit = QLineEdit(public_host)
+        self.public_port_spin = QSpinBox()
+        self.public_port_spin.setRange(1, 65535)
+        self.public_port_spin.setValue(public_port)
+        self.password_env_edit = QLineEdit(f"IMOU_CAM_{re.sub(r'[^A-Za-z0-9]+', '_', next_camera_id).upper()}_PASSWORD")
+        self.enabled_check = QCheckBox("Enable this camera immediately")
+        self.enabled_check.setChecked(True)
+
+        form = QFormLayout()
+        form.addRow("Camera ID", self.id_edit)
+        form.addRow("Display Name", self.name_edit)
+        form.addRow("LAN Host", self.lan_host_edit)
+        form.addRow("LAN Port", self.lan_port_spin)
+        form.addRow("DDNS Host", self.ddns_host_edit)
+        form.addRow("DDNS Port", self.ddns_port_spin)
+        form.addRow("Public Host", self.public_host_edit)
+        form.addRow("Public Port", self.public_port_spin)
+        form.addRow("Password Env", self.password_env_edit)
+        form.addRow("", self.enabled_check)
+
+        helper = QLabel(
+            "Recommended pattern: keep LAN port at 554, use one unique forwarded public port per camera, and map one password env per camera."
+        )
+        helper.setWordWrap(True)
+        helper.setStyleSheet("color: #5b6472;")
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(helper)
+        layout.addStretch(1)
+        layout.addWidget(buttons)
+
+    def values(self) -> dict[str, object]:
+        return {
+            "camera_id": self.id_edit.text().strip(),
+            "name": self.name_edit.text().strip(),
+            "lan_host": self.lan_host_edit.text().strip(),
+            "lan_port": int(self.lan_port_spin.value()),
+            "ddns_host": self.ddns_host_edit.text().strip(),
+            "ddns_port": int(self.ddns_port_spin.value()),
+            "public_host": self.public_host_edit.text().strip(),
+            "public_port": int(self.public_port_spin.value()),
+            "password_env_name": self.password_env_edit.text().strip(),
+            "enabled": self.enabled_check.isChecked(),
+        }
+
+
 class ControlPanelWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -154,6 +226,8 @@ class ControlPanelWindow(QMainWindow):
         self.metric_enabled = MetricCard("Enabled Cameras", "green")
         self.metric_mode = MetricCard("Target Mode", "blue")
         self.metric_ddns = MetricCard("DDNS Host", "orange")
+        self.metric_health = MetricCard("Health Snapshot", "green")
+        self.camera_health_status: dict[str, tuple[str, str]] = {}
 
         self._build_ui()
         self._apply_styles()
@@ -294,6 +368,7 @@ class ControlPanelWindow(QMainWindow):
         metric_layout.addWidget(self.metric_enabled)
         metric_layout.addWidget(self.metric_mode)
         metric_layout.addWidget(self.metric_ddns)
+        metric_layout.addWidget(self.metric_health)
         root_layout.addLayout(metric_layout)
 
         tabs = QTabWidget()
@@ -472,8 +547,11 @@ class ControlPanelWindow(QMainWindow):
         box_layout.addWidget(self.inventory_table, 1)
 
         actions = QHBoxLayout()
-        btn_add = QPushButton("Add Camera")
-        btn_add.clicked.connect(self.add_camera_inventory_row)
+        btn_add = QPushButton("Add Camera Wizard")
+        btn_add.setObjectName("primary")
+        btn_add.clicked.connect(self.open_add_camera_wizard)
+        btn_add_quick = QPushButton("Add Draft Row")
+        btn_add_quick.clicked.connect(self.add_camera_inventory_row)
         btn_remove = QPushButton("Remove Selected")
         btn_remove.clicked.connect(self.remove_selected_inventory_rows)
         btn_reload = QPushButton("Reload Inventory")
@@ -482,6 +560,7 @@ class ControlPanelWindow(QMainWindow):
         btn_save.setObjectName("primary")
         btn_save.clicked.connect(self.save_camera_inventory)
         actions.addWidget(btn_add)
+        actions.addWidget(btn_add_quick)
         actions.addWidget(btn_remove)
         actions.addWidget(btn_reload)
         actions.addStretch(1)
@@ -604,19 +683,32 @@ class ControlPanelWindow(QMainWindow):
         self.camera_table.setRowCount(len(rows))
 
         for row_index, row in enumerate(rows):
+            status_value, status_helper = self.camera_health_status.get(
+                row.camera_id,
+                ("Disabled" if not row.enabled else "Unknown", "Run health check to verify"),
+            )
             values = [
                 f"{row.camera_id} | {row.name}",
                 row.lan,
                 row.ddns,
                 row.public,
-                "Enabled" if row.enabled else "Disabled",
+                status_value,
             ]
             for col_index, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setData(Qt.UserRole, row.camera_id)
                 if col_index == 4:
+                    item.setData(Qt.ToolTipRole, status_helper)
+                if col_index == 4:
                     item.setTextAlignment(Qt.AlignCenter)
-                    item.setForeground(Qt.darkGreen if row.enabled else Qt.darkRed)
+                    if value == "Healthy":
+                        item.setForeground(Qt.darkGreen)
+                    elif value == "Degraded":
+                        item.setForeground(Qt.darkYellow)
+                    elif value == "Disabled":
+                        item.setForeground(Qt.darkGray)
+                    else:
+                        item.setForeground(Qt.darkRed)
                 if col_index == 0 and row.enabled:
                     item.setForeground(Qt.darkGreen)
                 self.camera_table.setItem(row_index, col_index, item)
@@ -706,6 +798,91 @@ class ControlPanelWindow(QMainWindow):
             password_env_name=password_env,
         )
 
+    def _validate_inventory_entries(self, entries) -> None:
+        seen_ids: set[str] = set()
+        seen_password_envs: set[str] = set()
+        seen_public: set[tuple[str, int]] = set()
+        seen_ddns: set[tuple[str, int]] = set()
+
+        for index, entry in enumerate(entries, start=1):
+            if not re.fullmatch(r"[A-Za-z0-9_-]+", entry.camera_id):
+                raise ValueError(f"Row {index}: Camera ID must use only letters, numbers, dash, or underscore.")
+            if entry.camera_id in seen_ids:
+                raise ValueError(f"Row {index}: Duplicate camera ID '{entry.camera_id}'.")
+            seen_ids.add(entry.camera_id)
+
+            if not re.fullmatch(r"IMOU_[A-Z0-9_]+", entry.password_env_name):
+                raise ValueError(f"Row {index}: Password env should look like IMOU_CAM_CAM3_PASSWORD.")
+            if entry.password_env_name in seen_password_envs:
+                raise ValueError(f"Row {index}: Duplicate password env '{entry.password_env_name}'.")
+            seen_password_envs.add(entry.password_env_name)
+
+            for label, port in [("LAN", entry.lan_port), ("DDNS", entry.ddns_port), ("Public", entry.public_port)]:
+                if port < 1 or port > 65535:
+                    raise ValueError(f"Row {index}: {label} port must be between 1 and 65535.")
+
+            public_key = (entry.public_host, entry.public_port)
+            if public_key in seen_public:
+                raise ValueError(f"Row {index}: Duplicate public host/port {entry.public_host}:{entry.public_port}.")
+            seen_public.add(public_key)
+
+            if entry.ddns_host:
+                ddns_key = (entry.ddns_host, entry.ddns_port)
+                if ddns_key in seen_ddns:
+                    raise ValueError(f"Row {index}: Duplicate DDNS host/port {entry.ddns_host}:{entry.ddns_port}.")
+                seen_ddns.add(ddns_key)
+
+    def _refresh_health_snapshot(self) -> None:
+        health_log = ROOT_DIR / "logs" / "system_health_check_latest.log"
+        status_map: dict[str, list[tuple[str, bool]]] = {}
+        if health_log.exists():
+            for line in health_log.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if "camera=" not in line or "mode=" not in line:
+                    continue
+                camera_match = re.search(r"camera=([A-Za-z0-9_-]+)", line)
+                mode_match = re.search(r"mode=([a-z]+)", line)
+                frame_match = re.search(r"frame_ok=(True|False)", line)
+                tcp_match = re.search(r"tcp_ok=(True|False)", line)
+                if not camera_match or not mode_match or not frame_match or not tcp_match:
+                    continue
+                ok = frame_match.group(1) == "True" and tcp_match.group(1) == "True"
+                status_map.setdefault(camera_match.group(1), []).append((mode_match.group(1), ok))
+
+        self.camera_health_status = {}
+        healthy = 0
+        degraded = 0
+        unknown = 0
+        for camera in self.vm.state.cameras:
+            if not camera.enabled:
+                self.camera_health_status[camera.camera_id] = ("Disabled", "Camera is disabled in inventory")
+                continue
+            checks = status_map.get(camera.camera_id, [])
+            if not checks:
+                self.camera_health_status[camera.camera_id] = ("Unknown", "Run health check to populate live status")
+                unknown += 1
+                continue
+            failed_modes = [mode for mode, ok in checks if not ok]
+            if failed_modes:
+                self.camera_health_status[camera.camera_id] = ("Degraded", f"Failed modes: {', '.join(sorted(set(failed_modes)))}")
+                degraded += 1
+            else:
+                self.camera_health_status[camera.camera_id] = ("Healthy", "All checked modes passed in the latest health run")
+                healthy += 1
+
+        summary = f"{healthy} healthy"
+        helper_parts = []
+        if degraded:
+            helper_parts.append(f"{degraded} degraded")
+        if unknown:
+            helper_parts.append(f"{unknown} unknown")
+        helper = ", ".join(helper_parts) if helper_parts else "Latest health snapshot is green"
+        self.metric_health.set_value(summary, helper)
+
+    def _next_camera_seed(self) -> tuple[str, int]:
+        existing_ids = {entry.camera_id for entry in self.vm.state.camera_editor_entries}
+        draft = self.vm.new_camera_entry(existing_ids)
+        return draft.camera_id, draft.public_port
+
     def _refresh_selection_summary(self) -> None:
         rows = self.selected_camera_rows()
         if not rows:
@@ -753,7 +930,7 @@ class ControlPanelWindow(QMainWindow):
         self.camera_table.clearSelection()
         for row in range(self.camera_table.rowCount()):
             status_item = self.camera_table.item(row, 4)
-            if status_item is not None and status_item.text() == "Enabled":
+            if status_item is not None and status_item.text() != "Disabled":
                 self.camera_table.selectRow(row)
         self._refresh_selection_summary()
 
@@ -769,6 +946,41 @@ class ControlPanelWindow(QMainWindow):
         self.metric_mode.set_value(self.mode_combo.currentText().strip() or "auto", "Preferred connection route for launches")
         ddns_value = self.ddns_edit.text().strip() or "Not set"
         self.metric_ddns.set_value(ddns_value, "Used when remote access needs a stable hostname")
+
+    def open_add_camera_wizard(self) -> None:
+        next_camera_id, next_public_port = self._next_camera_seed()
+        public_host = self.vm.state.camera_editor_entries[0].public_host if self.vm.state.camera_editor_entries else "125.27.213.148"
+        dialog = CameraWizardDialog(
+            next_camera_id=next_camera_id,
+            ddns_host=self.ddns_edit.text().strip(),
+            public_host=public_host,
+            public_port=next_public_port,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.Accepted:
+            return
+        payload = dialog.values()
+        from mtimou_v2.app_state import CameraEditorEntry
+
+        entry = CameraEditorEntry(
+            camera_id=str(payload["camera_id"]),
+            name=str(payload["name"]) or str(payload["camera_id"]),
+            lan_host=str(payload["lan_host"]),
+            lan_port=int(payload["lan_port"]),
+            ddns_host=str(payload["ddns_host"]),
+            ddns_port=int(payload["ddns_port"]),
+            public_host=str(payload["public_host"]),
+            public_port=int(payload["public_port"]),
+            channel="1",
+            subtype="0",
+            transport="tcp",
+            enabled=bool(payload["enabled"]),
+            username_env="IMOU_CAMERA_USERNAME",
+            password_env_name=str(payload["password_env_name"]),
+        )
+        self.vm.state.camera_editor_entries.append(entry)
+        self._refresh_inventory_table()
+        self.append_output(f"[INFO] Added wizard camera row for {entry.camera_id}")
 
     def add_camera_inventory_row(self) -> None:
         existing_ids = set()
@@ -796,12 +1008,14 @@ class ControlPanelWindow(QMainWindow):
         try:
             for row in range(self.inventory_table.rowCount()):
                 entries.append(self._inventory_row_to_entry(row))
+            self._validate_inventory_entries(entries)
         except ValueError as exc:
             QMessageBox.warning(self, WINDOW_TITLE, str(exc))
             return
 
         self.vm.save_camera_inventory(entries)
         self._rebuild_password_fields()
+        self._refresh_health_snapshot()
         self._refresh_camera_table()
         self._refresh_inventory_table()
         self._update_metric_cards()
@@ -837,6 +1051,7 @@ class ControlPanelWindow(QMainWindow):
         self.ddns_edit.setText(self.vm.state.ddns_host)
         self.user_edit.setText(self.vm.state.username or "admin")
         self._rebuild_password_fields()
+        self._refresh_health_snapshot()
         self._refresh_camera_table()
         self._refresh_inventory_table()
         self._update_metric_cards()
@@ -903,6 +1118,8 @@ class ControlPanelWindow(QMainWindow):
             self._set_status("Health check passed")
         else:
             self._set_status(f"Health check failed (exit {exit_code})")
+        self._refresh_health_snapshot()
+        self._refresh_camera_table()
         self.append_output(f"[INFO] Health check finished with exit code {exit_code}")
         self.health_process = None
         if self.open_log_checkbox.isChecked():

@@ -138,7 +138,7 @@ Important note:
 - [`run_resilience_smoke.bat`](./run_resilience_smoke.bat)
   - Repeat first-frame checks across selected modes/cycles to catch short-lived instability
 - [`run_control_panel.bat`](./run_control_panel.bat)
-  - Desktop control panel for launching cameras, selecting mode, editing common settings, managing camera inventory, and running health checks
+  - Desktop control panel for launching cameras, selecting mode, editing common settings, managing camera inventory, onboarding new cameras, and running health checks
 - [`src/direct_rtsp_opencv.py`](./src/direct_rtsp_opencv.py)
   - Single-camera live viewer with reconnect logic
 - [`src/multi_camera_view.py`](./src/multi_camera_view.py)

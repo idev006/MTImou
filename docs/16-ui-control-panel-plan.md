@@ -44,6 +44,10 @@ The current UI release provides:
 6. Activity and guidance panels
    - recent command output
    - concise operator flow and target mode explanations
+7. Health cues and onboarding support
+   - per-camera status derived from the latest health check log
+   - guided add-camera wizard for consistent onboarding
+   - validation before inventory save for duplicate IDs, duplicate ports, and malformed password env names
 
 ## Technical Approach
 
