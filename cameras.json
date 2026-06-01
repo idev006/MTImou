@@ -2,7 +2,7 @@
   "cameras": [
     {
       "id": "cam1",
-      "name": "Camera 1",
+      "name": "Front House",
       "lan_host": "192.168.1.2",
       "lan_port": 554,
       "public_host": "125.27.213.148",
@@ -16,7 +16,7 @@
     },
     {
       "id": "cam2",
-      "name": "Camera 2",
+      "name": "Side House",
       "lan_host": "192.168.1.5",
       "lan_port": 554,
       "public_host": "125.27.213.148",

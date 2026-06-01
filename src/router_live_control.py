@@ -18,6 +18,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import WebDriverException
 
 from venv_guard import enforce_venv_python
 
@@ -186,10 +187,78 @@ def click_id_if_present(driver: webdriver.Chrome, element_id: str, delay: float)
     return True
 
 
-def set_field_value(driver: webdriver.Chrome, element_id: str, value: str) -> None:
-    element = driver.find_element(By.ID, element_id)
-    element.clear()
-    element.send_keys(value)
+def find_visible_by_candidates(driver: webdriver.Chrome, tag: str, candidates: list[str]):
+    for candidate in candidates:
+        if candidate.endswith(":"):
+            selector = f"{tag}[id^='{candidate}']"
+        else:
+            selector = f"{tag}#{candidate}"
+        for element in driver.find_elements(By.CSS_SELECTOR, selector):
+            try:
+                if element.is_displayed() and element.is_enabled():
+                    return element
+            except WebDriverException:
+                continue
+    return None
+
+
+def find_visible_by_prefix(driver: webdriver.Chrome, tag: str, prefix: str):
+    for element in driver.find_elements(By.CSS_SELECTOR, f"{tag}[id^='{prefix}']"):
+        try:
+            if element.is_displayed() and element.is_enabled():
+                return element
+        except WebDriverException:
+            continue
+    return None
+
+
+def expand_port_forward_rows(driver: webdriver.Chrome) -> None:
+    for selector in ("span.instName.collapsibleInst", "span.instName.collapsibleInst.instNameExp"):
+        for el in driver.find_elements(By.CSS_SELECTOR, selector):
+            try:
+                if el.is_displayed():
+                    driver.execute_script("arguments[0].click();", el)
+            except Exception:
+                continue
+
+
+def create_new_port_forward_item(driver: webdriver.Chrome) -> None:
+    try:
+        add_bar = driver.find_element(By.ID, "addInstBar_PortForwarding")
+        driver.execute_script("arguments[0].click();", add_bar)
+    except Exception:
+        return
+
+
+def reveal_hidden_port_forward_template(driver: webdriver.Chrome) -> None:
+    driver.execute_script(
+        """
+        var root = document.getElementById('template_PortForwarding');
+        if (root) { root.style.display = 'block'; }
+        var area = document.getElementById('changeArea_PortForwarding');
+        if (area) { area.style.display = 'block'; }
+        var top = document.getElementById('topLine_PortForwarding');
+        if (top) { top.style.display = 'block'; }
+        """
+    )
+
+
+def set_field_value_by_candidates(driver: webdriver.Chrome, candidates: list[str], value: str) -> None:
+    element = find_visible_by_candidates(driver, "input", candidates)
+    if element is None:
+        raise RuntimeError(f"Visible field not found for candidates: {candidates}")
+    try:
+        element.clear()
+        element.send_keys(value)
+    except Exception:
+        driver.execute_script("arguments[0].value = arguments[1];", element, value)
+
+
+def select_value_by_candidates(driver: webdriver.Chrome, candidates: list[str], value: str) -> None:
+    element = find_visible_by_candidates(driver, "select", candidates)
+    if element is None:
+        raise RuntimeError(f"Visible select not found for candidates: {candidates}")
+    Select(element).select_by_value(value)
 
 
 def configure_port_forward(
@@ -205,16 +274,33 @@ def configure_port_forward(
         if not click_id_if_present(driver, element_id, delay):
             raise RuntimeError(f"Required port-forward menu not found: {element_id}")
 
-    set_field_value(driver, "Alias:0", alias)
-    Select(driver.find_element(By.ID, "Protocol:0")).select_by_value(protocol.upper())
-    Select(driver.find_element(By.ID, "S_Interface:0")).select_by_value("WANAll")
-    set_field_value(driver, "InternalClient:0", lan_ip)
-    set_field_value(driver, "ExternalPort:0", wan_port)
-    set_field_value(driver, "ExternalPortEndRange:0", wan_port)
-    set_field_value(driver, "InternalPort:0", lan_port)
-    set_field_value(driver, "InternalPortEndRange:0", lan_port)
+    expand_port_forward_rows(driver)
     slow(delay)
-    driver.execute_script("document.getElementById('Btn_apply_PortForwarding:0').click();")
+    create_new_port_forward_item(driver)
+    slow(delay)
+    expand_port_forward_rows(driver)
+    slow(delay)
+    if find_visible_by_candidates(driver, "input", ["Alias", "Alias:"]) is None:
+        reveal_hidden_port_forward_template(driver)
+        slow(delay)
+
+    set_field_value_by_candidates(driver, ["Alias", "Alias:"], alias)
+    select_value_by_candidates(driver, ["Protocol", "Protocol:"], protocol.upper())
+    select_value_by_candidates(driver, ["S_Interface", "S_Interface:"], "WANAll")
+    set_field_value_by_candidates(driver, ["InternalClient", "InternalClient:"], lan_ip)
+    set_field_value_by_candidates(driver, ["ExternalPort", "ExternalPort:"], wan_port)
+    set_field_value_by_candidates(driver, ["ExternalPortEndRange", "ExternalPortEndRange:"], wan_port)
+    set_field_value_by_candidates(driver, ["InternalPort", "InternalPort:"], lan_port)
+    set_field_value_by_candidates(driver, ["InternalPortEndRange", "InternalPortEndRange:"], lan_port)
+    slow(delay)
+    apply_btn = find_visible_by_candidates(
+        driver,
+        "input",
+        ["Btn_apply_PortForwarding", "Btn_apply_PortForwarding:"],
+    )
+    if apply_btn is None:
+        raise RuntimeError("Visible Port Forward apply button not found")
+    driver.execute_script("arguments[0].click();", apply_btn)
     slow(max(delay, 3.0))
 
     try:
