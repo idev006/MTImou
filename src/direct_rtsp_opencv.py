@@ -34,6 +34,15 @@ def make_logger(log_path: Path):
     return _log
 
 
+def overlay_style() -> dict[str, float | int]:
+    return {
+        "meta_scale": float(os.getenv("IMOU_OVERLAY_META_SCALE", "0.62")),
+        "small_scale": float(os.getenv("IMOU_OVERLAY_SMALL_SCALE", "0.56")),
+        "meta_thickness": int(os.getenv("IMOU_OVERLAY_META_THICKNESS", "2")),
+        "small_thickness": int(os.getenv("IMOU_OVERLAY_SMALL_THICKNESS", "1")),
+    }
+
+
 def main() -> int:
     enforce_venv_python()
 
@@ -57,6 +66,7 @@ def main() -> int:
         )
     )
     log = make_logger(log_path)
+    style = overlay_style()
 
     if not host:
         print("Missing IMOU_PUBLIC_RTSP_HOST")
@@ -154,21 +164,21 @@ def main() -> int:
                 cv2.putText(
                     frame,
                     f"frames={frame_count} fps~{fps:.1f}",
-                    (20, 35),
+                    (16, 28),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.9,
+                    style["meta_scale"],
                     (80, 255, 120),
-                    2,
+                    style["meta_thickness"],
                     cv2.LINE_AA,
                 )
                 cv2.putText(
                     frame,
                     f"reconnects={reconnects}",
-                    (20, 70),
+                    (16, 52),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.8,
+                    style["small_scale"],
                     (255, 220, 80),
-                    2,
+                    style["small_thickness"],
                     cv2.LINE_AA,
                 )
                 cv2.imshow(window_name, frame)
@@ -178,31 +188,31 @@ def main() -> int:
                 cv2.putText(
                     canvas,
                     f"No frame for {idle:.1f}s",
-                    (20, 50),
+                    (16, 38),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    1.0,
+                    style["meta_scale"],
                     (0, 0, 255),
-                    2,
+                    style["meta_thickness"],
                     cv2.LINE_AA,
                 )
                 cv2.putText(
                     canvas,
                     f"reconnects={reconnects}",
-                    (20, 90),
+                    (16, 62),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.9,
+                    style["small_scale"],
                     (255, 220, 80),
-                    2,
+                    style["small_thickness"],
                     cv2.LINE_AA,
                 )
                 cv2.putText(
                     canvas,
                     "Waiting for stream recovery...",
-                    (20, 130),
+                    (16, 86),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.9,
+                    style["small_scale"],
                     (220, 220, 220),
-                    2,
+                    style["small_thickness"],
                     cv2.LINE_AA,
                 )
                 cv2.imshow(window_name, canvas)

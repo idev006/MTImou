@@ -115,6 +115,17 @@ def compose_grid(frames: list[np.ndarray], cols: int = 2) -> np.ndarray:
     return np.vstack(row_imgs)
 
 
+def overlay_style() -> dict[str, float | int]:
+    return {
+        "title_scale": float(os.getenv("IMOU_OVERLAY_TITLE_SCALE", "0.62")),
+        "meta_scale": float(os.getenv("IMOU_OVERLAY_META_SCALE", "0.54")),
+        "small_scale": float(os.getenv("IMOU_OVERLAY_SMALL_SCALE", "0.50")),
+        "title_thickness": int(os.getenv("IMOU_OVERLAY_TITLE_THICKNESS", "2")),
+        "meta_thickness": int(os.getenv("IMOU_OVERLAY_META_THICKNESS", "1")),
+        "small_thickness": int(os.getenv("IMOU_OVERLAY_SMALL_THICKNESS", "1")),
+    }
+
+
 def main() -> int:
     enforce_venv_python()
     args = sys.argv[1:]
@@ -136,6 +147,7 @@ def main() -> int:
         return 2
 
     states = [build_state(camera) for camera in cameras]
+    style = overlay_style()
     for state in states:
         log(f"[INFO] Camera={state.camera.camera_id} mode={state.mode} target={state.host}:{state.port} url={state.safe_url}")
     grid_cols = choose_grid_cols(len(states))
@@ -170,7 +182,7 @@ def main() -> int:
             for state in states:
                 if not state.camera.password:
                     tile = blank_tile()
-                    cv2.putText(tile, f"{state.camera.camera_id}: missing password", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+                    cv2.putText(tile, f"{state.camera.camera_id}: missing password", (16, 56), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (0, 0, 255), style["title_thickness"], cv2.LINE_AA)
                     tiles.append(tile)
                     continue
 
@@ -190,17 +202,17 @@ def main() -> int:
                     elapsed = max(now - state.started, 1e-6)
                     fps = state.frame_count / elapsed
                     tile = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
-                    cv2.putText(tile, f"{state.camera.name} [{state.mode}]", (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (80, 255, 120), 2, cv2.LINE_AA)
-                    cv2.putText(tile, f"frames={state.frame_count} fps~{fps:.1f}", (12, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 220, 80), 2, cv2.LINE_AA)
-                    cv2.putText(tile, f"reconnects={state.reconnects}", (12, 88), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 220), 2, cv2.LINE_AA)
+                    cv2.putText(tile, f"{state.camera.name} [{state.mode}]", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (80, 255, 120), style["title_thickness"], cv2.LINE_AA)
+                    cv2.putText(tile, f"frames={state.frame_count} fps~{fps:.1f}", (10, 46), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (255, 220, 80), style["meta_thickness"], cv2.LINE_AA)
+                    cv2.putText(tile, f"reconnects={state.reconnects}", (10, 66), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (220, 220, 220), style["meta_thickness"], cv2.LINE_AA)
                 else:
                     idle = now - state.last_ok
                     tile = blank_tile()
-                    cv2.putText(tile, f"{state.camera.name} [{state.mode}]", (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (80, 255, 120), 2, cv2.LINE_AA)
-                    cv2.putText(tile, f"No frame for {idle:.1f}s", (12, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
-                    cv2.putText(tile, f"reconnects={state.reconnects}", (12, 105), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 220), 2, cv2.LINE_AA)
+                    cv2.putText(tile, f"{state.camera.name} [{state.mode}]", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (80, 255, 120), style["title_thickness"], cv2.LINE_AA)
+                    cv2.putText(tile, f"No frame for {idle:.1f}s", (10, 54), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (0, 0, 255), style["title_thickness"], cv2.LINE_AA)
+                    cv2.putText(tile, f"reconnects={state.reconnects}", (10, 76), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (220, 220, 220), style["meta_thickness"], cv2.LINE_AA)
                     if state.status_text:
-                        cv2.putText(tile, f"status={state.status_text}", (12, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 180, 180), 2, cv2.LINE_AA)
+                        cv2.putText(tile, f"status={state.status_text}", (10, 98), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (180, 180, 180), style["small_thickness"], cv2.LINE_AA)
                     if idle >= restart_idle_sec and now >= state.next_retry_ts:
                         state.status_text = f"idle {idle:.1f}s"
                         reopen(state, f"idle={idle:.1f}s")
