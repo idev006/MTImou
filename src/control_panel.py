@@ -116,6 +116,8 @@ class ControlPanelWindow(QMainWindow):
         self.pass2_edit = QLineEdit()
         self.pass1_edit.setEchoMode(QLineEdit.Password)
         self.pass2_edit.setEchoMode(QLineEdit.Password)
+        self.show_passwords_checkbox = QCheckBox("Show passwords")
+        self.show_passwords_checkbox.toggled.connect(self.toggle_password_visibility)
         self.open_log_checkbox = QCheckBox("Open logs folder after health check")
         self.open_log_checkbox.setChecked(True)
         self.camera_list = QListWidget()
@@ -201,6 +203,7 @@ class ControlPanelWindow(QMainWindow):
         settings_layout.addRow("Camera username", self.user_edit)
         settings_layout.addRow("Camera 1 password", self.pass1_edit)
         settings_layout.addRow("Camera 2 password", self.pass2_edit)
+        settings_layout.addRow("", self.show_passwords_checkbox)
         layout.addWidget(settings_box, 1)
 
         return panel
@@ -304,6 +307,11 @@ class ControlPanelWindow(QMainWindow):
         for item in self.camera_list.selectedItems():
             ids.append(str(item.data(Qt.UserRole)))
         return ids
+
+    def toggle_password_visibility(self, visible: bool) -> None:
+        mode = QLineEdit.Normal if visible else QLineEdit.Password
+        self.pass1_edit.setEchoMode(mode)
+        self.pass2_edit.setEchoMode(mode)
 
     def save_settings(self) -> None:
         updates = {

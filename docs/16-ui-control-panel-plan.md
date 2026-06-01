@@ -29,6 +29,7 @@ The first UI release will provide:
 4. Settings fields:
    - shared DDNS host
    - camera passwords used by the current deployment
+   - password visibility toggle
 5. Output panel:
    - last command output
    - health-check result
