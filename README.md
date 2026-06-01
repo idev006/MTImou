@@ -158,6 +158,8 @@ Operational and architecture documents live in [`docs`](./docs):
 - [`docs/multi-camera-runbook.md`](./docs/multi-camera-runbook.md)
 - [`docs/12-production-hardening-plan.md`](./docs/12-production-hardening-plan.md)
 - [`docs/13-incident-runbook.md`](./docs/13-incident-runbook.md)
+- [`docs/14-final-acceptance-checklist.md`](./docs/14-final-acceptance-checklist.md)
+- [`docs/15-cam3-cam4-rollout-template.md`](./docs/15-cam3-cam4-rollout-template.md)
 
 ## Roadmap
 

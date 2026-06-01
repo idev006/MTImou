@@ -23,8 +23,10 @@ Current operator-facing entrypoints:
 12. [11-ddns-and-scaleout-plan.md](./11-ddns-and-scaleout-plan.md)
 13. [12-production-hardening-plan.md](./12-production-hardening-plan.md)
 14. [13-incident-runbook.md](./13-incident-runbook.md)
-15. [multi-camera-runbook.md](./multi-camera-runbook.md)
-16. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
+15. [14-final-acceptance-checklist.md](./14-final-acceptance-checklist.md)
+16. [15-cam3-cam4-rollout-template.md](./15-cam3-cam4-rollout-template.md)
+17. [multi-camera-runbook.md](./multi-camera-runbook.md)
+18. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
 
 ## Working Model
 
