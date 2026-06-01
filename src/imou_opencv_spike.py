@@ -159,7 +159,9 @@ def build_rtsp_url(cfg: SpikeConfig) -> str:
 
 def build_rtsp_urls(cfg: SpikeConfig) -> list[str]:
     remembered = load_last_good_subtype()
-    preferred = remembered or (cfg.subtype if cfg.subtype in {"0", "1"} else "0")
+    # ffmpeg_pipe is more reliable with the substream as a starting point.
+    default_preferred = "1" if cfg.capture_backend == "ffmpeg_pipe" else "0"
+    preferred = remembered or (cfg.subtype if cfg.subtype in {"0", "1"} else default_preferred)
     other = "1" if preferred == "0" else "0"
     urls: list[str] = []
     for subtype in [preferred, other]:
