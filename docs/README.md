@@ -21,8 +21,10 @@ Current operator-facing entrypoints:
 10. [09-remote-free-dhp2p-status.md](./09-remote-free-dhp2p-status.md)
 11. [10-product-test-report-2026-05-31.md](./10-product-test-report-2026-05-31.md)
 12. [11-ddns-and-scaleout-plan.md](./11-ddns-and-scaleout-plan.md)
-13. [multi-camera-runbook.md](./multi-camera-runbook.md)
-14. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
+13. [12-production-hardening-plan.md](./12-production-hardening-plan.md)
+14. [13-incident-runbook.md](./13-incident-runbook.md)
+15. [multi-camera-runbook.md](./multi-camera-runbook.md)
+16. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
 
 ## Working Model
 

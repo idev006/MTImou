@@ -59,6 +59,13 @@ cd /d F:\programming\python\MTImou
 run_direct_stable.bat
 ```
 
+System health check:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_system_health_check.bat
+```
+
 ## Mode Selection
 
 Supported values:
@@ -105,6 +112,8 @@ Important note:
   - Run multiple cameras in one window
 - [`run_direct_stable.bat`](./run_direct_stable.bat)
   - Default single-camera entrypoint, currently points to `cam1`
+- [`run_system_health_check.bat`](./run_system_health_check.bat)
+  - Validate LAN, DDNS, and public paths with TCP and RTSP first-frame checks
 - [`src/direct_rtsp_opencv.py`](./src/direct_rtsp_opencv.py)
   - Single-camera live viewer with reconnect logic
 - [`src/multi_camera_view.py`](./src/multi_camera_view.py)
@@ -147,6 +156,8 @@ Operational and architecture documents live in [`docs`](./docs):
 
 - [`docs/README.md`](./docs/README.md)
 - [`docs/multi-camera-runbook.md`](./docs/multi-camera-runbook.md)
+- [`docs/12-production-hardening-plan.md`](./docs/12-production-hardening-plan.md)
+- [`docs/13-incident-runbook.md`](./docs/13-incident-runbook.md)
 
 ## Roadmap
 

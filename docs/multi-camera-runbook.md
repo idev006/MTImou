@@ -28,6 +28,22 @@ cd /d F:\programming\python\MTImou
 run_multi_camera_stable.bat cam1 cam2
 ```
 
+## Health Check
+
+```bat
+cd /d F:\programming\python\MTImou
+run_system_health_check.bat
+```
+
+This checks:
+
+- `.venv` runtime
+- `LAN` target
+- `DDNS` target
+- `public` target
+- TCP reachability
+- RTSP first-frame acquisition
+
 Grid behavior:
 
 - `1 camera` -> `1x1`
