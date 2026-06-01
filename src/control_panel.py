@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,77 +37,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from camera_registry import default_password_env_names, enabled_cameras, load_cameras, target_modes_summary
+from mtimou_v2.app_state import OperatorSettingsState
+from mtimou_v2.viewmodels.control_panel_vm import ControlPanelViewModel
 from venv_guard import enforce_venv_python
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT_DIR / "camera.env.bat"
-PYTHON_PATH = ROOT_DIR / ".venv" / "Scripts" / "python.exe"
 WINDOW_TITLE = "MTImou Control Panel"
-CREATE_NEW_CONSOLE = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
 MODE_OPTIONS = ["auto", "lan", "ddns", "public"]
-
-
-def parse_env_bat(path: Path) -> tuple[list[str], dict[str, str]]:
-    lines: list[str] = []
-    values: dict[str, str] = {}
-    if path.exists():
-        lines = path.read_text(encoding="ascii", errors="ignore").splitlines()
-        for line in lines:
-            stripped = line.strip()
-            if stripped.lower().startswith("set ") and "=" in stripped:
-                payload = stripped[4:]
-                if payload.startswith('"') and payload.endswith('"'):
-                    payload = payload[1:-1]
-                key, value = payload.split("=", 1)
-                values[key.strip()] = unescape_batch_value(value.strip())
-    return lines, values
-
-
-def unescape_batch_value(value: str) -> str:
-    unescaped = value.replace("%%", "%")
-    unescaped = unescaped.replace('^"', '"')
-    unescaped = unescaped.replace("^^", "^")
-    return unescaped
-
-
-def escape_batch_value(value: str) -> str:
-    escaped = value.replace("^", "^^")
-    escaped = escaped.replace("%", "%%")
-    escaped = escaped.replace('"', '^"')
-    return escaped
-
-
-def write_env_bat(path: Path, original_lines: list[str], updates: dict[str, str]) -> None:
-    remaining = dict(updates)
-    new_lines: list[str] = []
-    for line in original_lines:
-        stripped = line.strip()
-        if stripped.lower().startswith("set ") and "=" in stripped:
-            payload = stripped[4:]
-            if payload.startswith('"') and payload.endswith('"'):
-                payload = payload[1:-1]
-            key, _ = payload.split("=", 1)
-            key = key.strip()
-            if key in remaining:
-                new_lines.append(f'set "{key}={escape_batch_value(remaining.pop(key))}"')
-                continue
-        new_lines.append(line)
-    if remaining:
-        if new_lines and new_lines[-1].strip():
-            new_lines.append("")
-        for key, value in remaining.items():
-            new_lines.append(f'set "{key}={escape_batch_value(value)}"')
-    path.write_text("\r\n".join(new_lines) + "\r\n", encoding="ascii")
-
-
-def launch_batch(batch_name: str, args: list[str] | None = None) -> None:
-    cmd = ["cmd.exe", "/c", str(ROOT_DIR / batch_name)]
-    if args:
-        cmd.extend(args)
-    subprocess.Popen(cmd, cwd=str(ROOT_DIR), creationflags=CREATE_NEW_CONSOLE)
-
 
 @dataclass(slots=True)
 class CameraRow:
@@ -130,7 +67,7 @@ class ControlPanelWindow(QMainWindow):
         self.resize(1180, 760)
         self.setMinimumSize(980, 680)
 
-        self.env_lines, self.env_values = parse_env_bat(ENV_PATH)
+        self.vm = ControlPanelViewModel(root_dir=ROOT_DIR, env_path=ENV_PATH)
         self.health_process: QProcess | None = None
 
         self.mode_combo = QComboBox()
@@ -297,19 +234,13 @@ class ControlPanelWindow(QMainWindow):
         if self.statusBar() is not None:
             self.statusBar().showMessage(message)
 
-    def _apply_env_values_to_process(self) -> None:
-        for key, value in self.env_values.items():
-            if key.startswith("IMOU_"):
-                os.environ[key] = value
-
     def _load_camera_rows(self) -> list[CameraRow]:
-        self._apply_env_values_to_process()
         rows: list[CameraRow] = []
-        for camera in load_cameras():
+        for camera in self.vm.state.cameras:
             rows.append(
                 CameraRow(
                     camera_id=camera.camera_id,
-                    label=f"{camera.camera_id} | {camera.name} | {' ; '.join(target_modes_summary(camera))}",
+                    label=camera.label,
                 )
             )
         return rows
@@ -322,34 +253,26 @@ class ControlPanelWindow(QMainWindow):
                 widget.deleteLater()
         self.password_fields.clear()
 
-        for camera in load_cameras():
-            env_names = default_password_env_names(camera.camera_id)
-            primary_env = env_names[0]
-            value = ""
-            for env_name in env_names:
-                value = self.env_values.get(env_name, "")
-                if value:
-                    break
-
+        for entry in self.vm.state.password_entries:
             row = QWidget()
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(0, 0, 0, 0)
             row_layout.setSpacing(8)
 
-            label = QLabel(f"{camera.name} ({camera.camera_id})")
+            label = QLabel(f"{entry.camera_name} ({entry.camera_id})")
             label.setMinimumWidth(190)
             edit = QLineEdit()
-            edit.setPlaceholderText(primary_env)
-            edit.setText(value)
+            edit.setPlaceholderText(entry.env_name)
+            edit.setText(entry.value)
             edit.setEchoMode(QLineEdit.Normal if self.show_passwords_checkbox.isChecked() else QLineEdit.Password)
-            hint = QLabel(primary_env)
+            hint = QLabel(entry.env_name)
             hint.setStyleSheet("color: #777; font-size: 11px;")
 
             row_layout.addWidget(label)
             row_layout.addWidget(edit, 1)
             row_layout.addWidget(hint)
             self.password_rows_layout.addWidget(row)
-            self.password_fields.append(PasswordField(camera_id=camera.camera_id, env_name=primary_env, edit=edit))
+            self.password_fields.append(PasswordField(camera_id=entry.camera_id, env_name=entry.env_name, edit=edit))
 
         self.password_rows_layout.addStretch(1)
 
@@ -378,32 +301,32 @@ class ControlPanelWindow(QMainWindow):
             field.edit.setEchoMode(mode)
 
     def save_settings(self) -> None:
-        updates = {
-            "IMOU_TARGET_MODE": self.mode_combo.currentText().strip() or "auto",
-            "IMOU_DDNS_HOST": self.ddns_edit.text().strip(),
-            "IMOU_CAMERA_USERNAME": self.user_edit.text().strip() or "admin",
-        }
-        for field in self.password_fields:
-            updates[field.env_name] = field.edit.text().strip()
-        if not ENV_PATH.exists():
-            self.env_lines = [
-                "@echo off",
-                "REM Local operator settings for MTImou",
-                "",
-            ]
-        write_env_bat(ENV_PATH, self.env_lines, updates)
-        self.env_lines, self.env_values = parse_env_bat(ENV_PATH)
-        self._apply_env_values_to_process()
+        new_state = OperatorSettingsState(
+            target_mode=self.mode_combo.currentText().strip() or "auto",
+            ddns_host=self.ddns_edit.text().strip(),
+            username=self.user_edit.text().strip() or "admin",
+            password_entries=[
+                self.vm.state.password_entries[index].__class__(
+                    camera_id=self.vm.state.password_entries[index].camera_id,
+                    camera_name=self.vm.state.password_entries[index].camera_name,
+                    env_name=field.env_name,
+                    value=field.edit.text().strip(),
+                )
+                for index, field in enumerate(self.password_fields)
+            ],
+            cameras=self.vm.state.cameras,
+            output_lines=self.vm.state.output_lines,
+        )
+        self.vm.save(new_state)
         self._refresh_camera_list()
         self.append_output(f"[INFO] Saved settings to {ENV_PATH}")
         self._set_status(f"Saved settings to {ENV_PATH}")
 
     def reload_settings(self) -> None:
-        self.env_lines, self.env_values = parse_env_bat(ENV_PATH)
-        self._apply_env_values_to_process()
-        self.mode_combo.setCurrentText(self.env_values.get("IMOU_TARGET_MODE", "auto") or "auto")
-        self.ddns_edit.setText(self.env_values.get("IMOU_DDNS_HOST", ""))
-        self.user_edit.setText(self.env_values.get("IMOU_CAMERA_USERNAME", "admin") or "admin")
+        self.vm.load()
+        self.mode_combo.setCurrentText(self.vm.state.target_mode or "auto")
+        self.ddns_edit.setText(self.vm.state.ddns_host)
+        self.user_edit.setText(self.vm.state.username or "admin")
         self._rebuild_password_fields()
         self._refresh_camera_list()
         self.append_output("[INFO] Reloaded settings from camera.env.bat")
@@ -415,24 +338,20 @@ class ControlPanelWindow(QMainWindow):
             QMessageBox.warning(self, WINDOW_TITLE, "Please select one or more cameras first.")
             return
         self.save_settings()
-        if len(camera_ids) == 1:
-            launch_batch("run_camera_stable.bat", [camera_ids[0]])
-            self.append_output(f"[INFO] Launched run_camera_stable.bat {camera_ids[0]}")
-            self._set_status(f"Launched camera viewer for {camera_ids[0]}")
-            return
-        launch_batch("run_multi_camera_stable.bat", camera_ids)
-        self.append_output(f"[INFO] Launched run_multi_camera_stable.bat {' '.join(camera_ids)}")
-        self._set_status(f"Launched selected cameras: {', '.join(camera_ids)}")
+        message, status = self.vm.launch_selected(camera_ids)
+        self.append_output(message)
+        self._set_status(status)
 
     def launch_all_cameras(self) -> None:
         self.save_settings()
-        ids = [camera.camera_id for camera in enabled_cameras()]
+        ids, result = self.vm.launch_all()
         if not ids:
             QMessageBox.warning(self, WINDOW_TITLE, "No enabled cameras found.")
             return
-        launch_batch("run_multi_camera_stable.bat", ids)
-        self.append_output(f"[INFO] Launched run_multi_camera_stable.bat {' '.join(ids)}")
-        self._set_status("Launched multi-camera viewer")
+        if result is not None:
+            message, status = result
+            self.append_output(message)
+            self._set_status(status)
 
     def run_health_check(self) -> None:
         if self.health_process is not None:
@@ -442,12 +361,13 @@ class ControlPanelWindow(QMainWindow):
         self.append_output("[INFO] Running system health check...")
         self._set_status("Running health check...")
 
+        program, arguments, process_env_values = self.vm.health_check_command()
         self.health_process = QProcess(self)
-        self.health_process.setProgram(str(PYTHON_PATH))
-        self.health_process.setArguments([str(ROOT_DIR / "src" / "system_health_check.py")])
+        self.health_process.setProgram(program)
+        self.health_process.setArguments(arguments)
         self.health_process.setWorkingDirectory(str(ROOT_DIR))
         process_env = self.health_process.processEnvironment()
-        for key, value in os.environ.items():
+        for key, value in process_env_values.items():
             process_env.insert(key, value)
         self.health_process.setProcessEnvironment(process_env)
         self.health_process.readyReadStandardOutput.connect(self._read_health_stdout)
@@ -478,10 +398,10 @@ class ControlPanelWindow(QMainWindow):
             self.open_logs_folder()
 
     def open_logs_folder(self) -> None:
-        os.startfile(str(ROOT_DIR / "logs"))
+        self.vm.open_logs_folder()
 
     def open_readme(self) -> None:
-        os.startfile(str(ROOT_DIR / "README.md"))
+        self.vm.open_readme()
 
 
 def main() -> int:

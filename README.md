@@ -125,6 +125,8 @@ Important note:
 
 - `src/mtimou_v2/`
   - Clean production-core rewrite for config, target selection, viewers, health, and resilience
+- `src/mtimou_v2/viewmodels/`
+  - MVVM foundation for the operator UI
 - [`run_camera_stable.bat`](./run_camera_stable.bat)
   - Run one camera by `camera-id`
 - [`run_multi_camera_stable.bat`](./run_multi_camera_stable.bat)
@@ -186,6 +188,9 @@ Operational and architecture documents live in [`docs`](./docs):
 - [`docs/15-cam3-cam4-rollout-template.md`](./docs/15-cam3-cam4-rollout-template.md)
 - [`docs/16-ui-control-panel-plan.md`](./docs/16-ui-control-panel-plan.md)
 - [`docs/18-clean-runtime-rewrite-plan.md`](./docs/18-clean-runtime-rewrite-plan.md)
+- [`docs/19-actors-usecases-sequences.md`](./docs/19-actors-usecases-sequences.md)
+- [`docs/20-ui-mvvm-ssot-architecture.md`](./docs/20-ui-mvvm-ssot-architecture.md)
+- [`docs/21-robustness-process-engineering.md`](./docs/21-robustness-process-engineering.md)
 
 ## Roadmap
 

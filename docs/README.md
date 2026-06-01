@@ -28,8 +28,11 @@ Current operator-facing entrypoints:
 17. [16-ui-control-panel-plan.md](./16-ui-control-panel-plan.md)
 18. [17-n-camera-secret-model.md](./17-n-camera-secret-model.md)
 19. [18-clean-runtime-rewrite-plan.md](./18-clean-runtime-rewrite-plan.md)
-20. [multi-camera-runbook.md](./multi-camera-runbook.md)
-21. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
+20. [19-actors-usecases-sequences.md](./19-actors-usecases-sequences.md)
+21. [20-ui-mvvm-ssot-architecture.md](./20-ui-mvvm-ssot-architecture.md)
+22. [21-robustness-process-engineering.md](./21-robustness-process-engineering.md)
+23. [multi-camera-runbook.md](./multi-camera-runbook.md)
+24. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
 
 ## Working Model
 
