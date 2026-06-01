@@ -59,9 +59,25 @@ def parse_env_bat(path: Path) -> tuple[list[str], dict[str, str]]:
             stripped = line.strip()
             if stripped.lower().startswith("set ") and "=" in stripped:
                 payload = stripped[4:]
+                if payload.startswith('"') and payload.endswith('"'):
+                    payload = payload[1:-1]
                 key, value = payload.split("=", 1)
-                values[key.strip()] = value.strip()
+                values[key.strip()] = unescape_batch_value(value.strip())
     return lines, values
+
+
+def unescape_batch_value(value: str) -> str:
+    unescaped = value.replace("%%", "%")
+    unescaped = unescaped.replace('^"', '"')
+    unescaped = unescaped.replace("^^", "^")
+    return unescaped
+
+
+def escape_batch_value(value: str) -> str:
+    escaped = value.replace("^", "^^")
+    escaped = escaped.replace("%", "%%")
+    escaped = escaped.replace('"', '^"')
+    return escaped
 
 
 def write_env_bat(path: Path, original_lines: list[str], updates: dict[str, str]) -> None:
@@ -71,17 +87,19 @@ def write_env_bat(path: Path, original_lines: list[str], updates: dict[str, str]
         stripped = line.strip()
         if stripped.lower().startswith("set ") and "=" in stripped:
             payload = stripped[4:]
+            if payload.startswith('"') and payload.endswith('"'):
+                payload = payload[1:-1]
             key, _ = payload.split("=", 1)
             key = key.strip()
             if key in remaining:
-                new_lines.append(f"set {key}={remaining.pop(key)}")
+                new_lines.append(f'set "{key}={escape_batch_value(remaining.pop(key))}"')
                 continue
         new_lines.append(line)
     if remaining:
         if new_lines and new_lines[-1].strip():
             new_lines.append("")
         for key, value in remaining.items():
-            new_lines.append(f"set {key}={value}")
+            new_lines.append(f'set "{key}={escape_batch_value(value)}"')
     path.write_text("\r\n".join(new_lines) + "\r\n", encoding="ascii")
 
 

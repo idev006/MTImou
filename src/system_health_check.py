@@ -114,6 +114,8 @@ def main() -> int:
 
     modes_raw = os.getenv("IMOU_HEALTH_MODES", "lan,ddns,public")
     modes = [part.strip().lower() for part in modes_raw.split(",") if part.strip()]
+    required_modes_raw = os.getenv("IMOU_HEALTH_REQUIRED_MODES", modes_raw)
+    required_modes = {part.strip().lower() for part in required_modes_raw.split(",") if part.strip()}
     tcp_timeout = float(os.getenv("IMOU_HEALTH_TCP_TIMEOUT_SEC", "2.0"))
     frame_timeout = float(os.getenv("IMOU_HEALTH_FRAME_TIMEOUT_SEC", "5.0"))
     log_path = Path(os.getenv("IMOU_HEALTH_LOG_PATH", str(ROOT_DIR / "logs" / "system_health_check_latest.log")))
@@ -121,6 +123,7 @@ def main() -> int:
 
     log(f"[INFO] Runtime python: {sys.executable}")
     log(f"[INFO] Health modes: {', '.join(modes)}")
+    log(f"[INFO] Required modes: {', '.join(sorted(required_modes))}")
     log(f"[INFO] Cameras: {', '.join(camera.camera_id for camera in cameras)}")
 
     results: list[CheckResult] = []
@@ -149,7 +152,7 @@ def main() -> int:
                         note=note,
                     )
                 )
-                if mode in {"ddns", "public"}:
+                if mode in required_modes:
                     hard_failures += 1
                     log(f"[FAIL] camera={camera.camera_id} mode={mode} note={note}")
                 else:
@@ -189,10 +192,10 @@ def main() -> int:
                 f"host={target.host} port={target.port} resolved_ip={resolved_ip or '-'} "
                 f"tcp_ok={tcp_ok} frame_ok={frame_ok} note={note}"
             )
-            if mode in {"ddns", "public"} and (not tcp_ok or not frame_ok):
+            if mode in required_modes and (not tcp_ok or not frame_ok):
                 hard_failures += 1
                 log(line.replace("[RESULT]", "[FAIL]"))
-            elif mode == "lan" and (not tcp_ok or not frame_ok):
+            elif not tcp_ok or not frame_ok:
                 log(line.replace("[RESULT]", "[WARN]"))
             else:
                 log(line)
