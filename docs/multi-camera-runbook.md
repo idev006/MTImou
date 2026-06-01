@@ -54,6 +54,7 @@ set IMOU_MULTI_GRID_COLS=2
 
 - Works now through `public` mode because both forwarded ports are live.
 - If the home's public IP changes after an ISP reconnect, set `ddns_host` in `cameras.json` and use `IMOU_TARGET_MODE=ddns` or leave `auto`.
+- Current DDNS hostname: `biiigbee-home.servecounterstrike.com`
 - You can also set one shared env hostname for the whole house:
 
 ```bat

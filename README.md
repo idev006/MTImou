@@ -95,6 +95,7 @@ Important note:
 
 - If the ISP changes the home's public IP, direct public-IP access will stop working until the new IP is known.
 - To harden this for real-world operations, configure DDNS in the router and then fill `ddns_host` in [`cameras.json`](./cameras.json).
+- Current DDNS hostname: `biiigbee-home.servecounterstrike.com`
 
 ## Main Files
 
