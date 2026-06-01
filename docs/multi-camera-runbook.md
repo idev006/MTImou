@@ -35,6 +35,13 @@ cd /d F:\programming\python\MTImou
 run_system_health_check.bat
 ```
 
+Resilience smoke:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_resilience_smoke.bat cam1 cam2
+```
+
 This checks:
 
 - `.venv` runtime
@@ -87,5 +94,6 @@ set IMOU_DDNS_HOST=YOUR-HOSTNAME.ddns.net
 ## Failure Handling
 
 - The viewers auto-reconnect after `IMOU_DIRECT_NO_FRAME_RESTART_SEC`
+- In `auto` mode, reconnects re-check `LAN`, then `DDNS`, then `public`
 - A bad camera should not drag down a healthy camera in multi-view
 - If a camera shows repeated auth failures, verify its password env in `camera.env.bat`

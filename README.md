@@ -13,6 +13,7 @@ Multi-camera IMOU RTSP viewer for LAN and worldwide access, with automatic targe
 - Local multi-camera viewer is working
 - Public RTSP forwarding is working for both cameras
 - Auto-reconnect is implemented
+- Runtime failover is implemented on reconnect (`LAN -> DDNS -> public` in `auto` mode)
 - Mode selection supports `auto`, `lan`, `ddns`, `public`
 
 ## Runtime Rules
@@ -75,6 +76,13 @@ cd /d F:\programming\python\MTImou
 run_system_health_check.bat
 ```
 
+Resilience smoke check:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_resilience_smoke.bat cam1 cam2
+```
+
 ## Mode Selection
 
 Supported values:
@@ -123,6 +131,8 @@ Important note:
   - Default single-camera entrypoint, currently points to `cam1`
 - [`run_system_health_check.bat`](./run_system_health_check.bat)
   - Validate LAN, DDNS, and public paths with TCP and RTSP first-frame checks
+- [`run_resilience_smoke.bat`](./run_resilience_smoke.bat)
+  - Repeat first-frame checks across selected modes/cycles to catch short-lived instability
 - [`run_control_panel.bat`](./run_control_panel.bat)
   - Desktop control panel for launching cameras, selecting mode, editing common settings, and running health checks
 - [`src/direct_rtsp_opencv.py`](./src/direct_rtsp_opencv.py)
@@ -137,7 +147,7 @@ Important note:
 ## Logs
 
 - Single camera:
-  - `logs\direct_<camera-id>_<mode>_latest.log`
+  - `logs\direct_<camera-id>_latest.log`
 - Multi camera:
   - `logs\multi_camera_latest.log`
 
@@ -146,6 +156,7 @@ Each viewer writes a `[SUMMARY]` line on exit.
 ## Failure Handling
 
 - If a stream stalls, the viewer will reopen the stream automatically
+- In `auto` mode, reconnects re-evaluate `LAN`, then `DDNS`, then `public`
 - If one camera is bad in multi-view, healthy cameras should continue
 - If a camera fails auth, check its password source in `camera.env.bat` and [`cameras.json`](./cameras.json)
 - If public mode fails after the home internet reconnects, update to DDNS and use `IMOU_TARGET_MODE=ddns` or `auto`

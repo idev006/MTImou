@@ -70,7 +70,6 @@ def default_password_env_names(camera_id: str) -> list[str]:
             names.append("IMOU_CAMERA_PASSWORD")
         else:
             names.append(f"IMOU_CAMERA{index}_PASSWORD")
-    names.append("IMOU_CAMERA_PASSWORD")
     deduped: list[str] = []
     for name in names:
         if name and name not in deduped:
@@ -152,11 +151,13 @@ def pick_target(camera: CameraConfig, timeout_sec: float = 1.2, preferred_mode: 
         return None
 
     def ddns_target() -> CameraTarget | None:
-        if camera.ddns_host:
+        if camera.ddns_host and _probe_tcp(camera.ddns_host, camera.ddns_port, timeout_sec=timeout_sec):
             return CameraTarget(camera=camera, mode="ddns", host=camera.ddns_host, port=camera.ddns_port)
         return None
 
-    def public_target() -> CameraTarget:
+    def public_target(probe: bool = False) -> CameraTarget | None:
+        if probe and not _probe_tcp(camera.public_host, camera.public_port, timeout_sec=timeout_sec):
+            return None
         return CameraTarget(camera=camera, mode="public", host=camera.public_host, port=camera.public_port)
 
     if preferred_mode == "lan":
@@ -165,12 +166,14 @@ def pick_target(camera: CameraConfig, timeout_sec: float = 1.2, preferred_mode: 
             raise RuntimeError(f"LAN target unavailable for {camera.camera_id}")
         return target
     if preferred_mode == "ddns":
-        target = ddns_target()
-        if target is None:
+        if not camera.ddns_host:
             raise RuntimeError(f"DDNS target not configured for {camera.camera_id}")
-        return target
+        return CameraTarget(camera=camera, mode="ddns", host=camera.ddns_host, port=camera.ddns_port)
     if preferred_mode == "public":
-        return public_target()
+        target = public_target(probe=False)
+        if target is None:
+            raise RuntimeError(f"Public target not configured for {camera.camera_id}")
+        return target
 
     target = lan_target()
     if target is not None:
@@ -178,7 +181,10 @@ def pick_target(camera: CameraConfig, timeout_sec: float = 1.2, preferred_mode: 
     target = ddns_target()
     if target is not None:
         return target
-    return public_target()
+    target = public_target(probe=True)
+    if target is not None:
+        return target
+    raise RuntimeError(f"No reachable target for {camera.camera_id}")
 
 
 def target_modes_summary(camera: CameraConfig) -> list[str]:

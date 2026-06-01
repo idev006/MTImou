@@ -10,6 +10,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 
+from camera_registry import CameraConfig, CameraTarget, get_camera, pick_target, target_modes_summary
 from venv_guard import enforce_venv_python
 
 
@@ -43,8 +44,20 @@ def overlay_style() -> dict[str, float | int]:
     }
 
 
+def camera_target_url(camera: CameraConfig, target: CameraTarget) -> tuple[str, str]:
+    safe_password = quote(camera.password, safe="")
+    url = (
+        f"rtsp://{camera.username}:{safe_password}@{target.host}:{target.port}"
+        f"/cam/realmonitor?channel={camera.channel}&subtype={camera.subtype}"
+    )
+    return url, url.replace(safe_password, "***")
+
+
 def main() -> int:
     enforce_venv_python()
+
+    camera_id = os.getenv("IMOU_CAMERA_ID", "").strip()
+    camera: CameraConfig | None = get_camera(camera_id) if camera_id else None
 
     host = os.getenv("IMOU_PUBLIC_RTSP_HOST", "").strip()
     port = os.getenv("IMOU_PUBLIC_RTSP_PORT", "45554").strip()
@@ -59,6 +72,8 @@ def main() -> int:
     first_frame_timeout_sec = float(os.getenv("IMOU_DIRECT_FIRST_FRAME_TIMEOUT_SEC", "6"))
     test_seconds = float(os.getenv("IMOU_DIRECT_TEST_SECONDS", "0") or "0")
     mode_label = os.getenv("IMOU_DIRECT_MODE_LABEL", "public").strip()
+    preferred_mode = os.getenv("IMOU_TARGET_MODE", "auto").strip().lower()
+    target_probe_timeout_sec = float(os.getenv("IMOU_TARGET_PROBE_TIMEOUT_SEC", "1.2"))
     log_path = Path(
         os.getenv(
             "IMOU_DIRECT_LOG_PATH",
@@ -68,22 +83,52 @@ def main() -> int:
     log = make_logger(log_path)
     style = overlay_style()
 
-    if not host:
-        print("Missing IMOU_PUBLIC_RTSP_HOST")
-        return 2
-    if not password:
-        print("Missing IMOU_CAMERA_PASSWORD")
-        return 2
+    current_mode = mode_label or "public"
+    current_url = ""
+    current_safe_url = ""
+    current_target_key: tuple[str, str, int] | None = None
+    failovers = 0
 
-    safe_password = quote(password, safe="")
-    url = (
-        f"rtsp://{user}:{safe_password}@{host}:{port}"
-        f"/cam/realmonitor?channel={channel}&subtype={subtype}"
-    )
-    safe_url = url.replace(safe_password, "***")
+    def resolve_current_target() -> tuple[str, str, str, str, tuple[str, str, int]]:
+        nonlocal current_target_key, failovers
+        if camera is not None:
+            target = pick_target(camera, timeout_sec=target_probe_timeout_sec, preferred_mode=preferred_mode)
+            url, safe_url = camera_target_url(camera, target)
+            target_key = (target.mode, target.host, target.port)
+            if current_target_key is not None and current_target_key != target_key:
+                failovers += 1
+                log(
+                    f"[WARN] Target failover camera={camera.camera_id} "
+                    f"from={current_target_key[0]}:{current_target_key[1]}:{current_target_key[2]} "
+                    f"to={target.mode}:{target.host}:{target.port}"
+                )
+            current_target_key = target_key
+            return target.mode, target.host, str(target.port), url, target_key
+
+        if not host:
+            raise RuntimeError("Missing IMOU_PUBLIC_RTSP_HOST")
+        if not password:
+            raise RuntimeError("Missing IMOU_CAMERA_PASSWORD")
+        safe_password = quote(password, safe="")
+        url = (
+            f"rtsp://{user}:{safe_password}@{host}:{port}"
+            f"/cam/realmonitor?channel={channel}&subtype={subtype}"
+        )
+        return current_mode, host, port, url, (current_mode, host, int(port))
+
+    try:
+        current_mode, current_host, current_port, current_url, current_target_key = resolve_current_target()
+    except RuntimeError as exc:
+        print(str(exc))
+        return 2
+    current_safe_url = current_url.replace(quote((camera.password if camera else password), safe=""), "***")
 
     log(f"[INFO] Runtime python: {sys.executable}")
-    log(f"[INFO] Mode={mode_label} Opening direct RTSP: {safe_url}")
+    if camera is not None:
+        log(f"[INFO] Camera={camera.camera_id} name={camera.name}")
+        log(f"[INFO] Candidate targets: {', '.join(target_modes_summary(camera))}")
+        log(f"[INFO] Preferred mode={preferred_mode}")
+    log(f"[INFO] Mode={current_mode} Opening direct RTSP: {current_safe_url}")
     log(
         f"[INFO] Health guard: restart if no frame for {restart_idle_sec:.1f}s "
         f"first-frame-timeout={first_frame_timeout_sec:.1f}s"
@@ -100,15 +145,25 @@ def main() -> int:
     cap: cv2.VideoCapture | None = None
 
     def reopen(reason: str) -> cv2.VideoCapture | None:
-        nonlocal reconnects, last_ok
+        nonlocal reconnects, last_ok, current_mode, current_url, current_safe_url, current_target_key
         reconnects += 1
         log(f"[WARN] Reopening stream ({reason}) attempt #{reconnects}")
         if cap is not None:
             cap.release()
         time.sleep(reconnect_sleep_sec)
-        new_cap = open_capture(url, transport)
+        try:
+            current_mode, current_host, current_port, current_url, current_target_key = resolve_current_target()
+        except RuntimeError as exc:
+            log(f"[WARN] Reopen target resolve failed: {exc}")
+            return None
+        current_safe_url = current_url.replace(
+            quote((camera.password if camera else password), safe=""),
+            "***",
+        )
+        log(f"[INFO] Reopen target mode={current_mode} target={current_host}:{current_port}")
+        new_cap = open_capture(current_url, camera.transport if camera is not None else transport)
         if not new_cap.isOpened():
-            log(f"[WARN] Reopen failed: {safe_url}")
+            log(f"[WARN] Reopen failed: {current_safe_url}")
             return None
         probe_start = time.monotonic()
         while time.monotonic() - probe_start < first_frame_timeout_sec:
@@ -124,9 +179,9 @@ def main() -> int:
         new_cap.release()
         return None
 
-    cap = open_capture(url, transport)
+    cap = open_capture(current_url, camera.transport if camera is not None else transport)
     if not cap.isOpened():
-        log(f"[ERROR] Failed to open stream: {safe_url}")
+        log(f"[ERROR] Failed to open stream: {current_safe_url}")
         return 1
 
     try:
@@ -173,7 +228,7 @@ def main() -> int:
                 )
                 cv2.putText(
                     frame,
-                    f"reconnects={reconnects}",
+                    f"reconnects={reconnects} failovers={failovers}",
                     (16, 52),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     style["small_scale"],
@@ -197,7 +252,7 @@ def main() -> int:
                 )
                 cv2.putText(
                     canvas,
-                    f"reconnects={reconnects}",
+                    f"reconnects={reconnects} failovers={failovers}",
                     (16, 62),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     style["small_scale"],
@@ -228,8 +283,8 @@ def main() -> int:
         elapsed = max(time.monotonic() - started, 1e-6)
         avg_fps = frame_count / elapsed
         log(
-            f"[SUMMARY] mode={mode_label} frames={frame_count} avg_fps={avg_fps:.2f} "
-            f"reconnects={reconnects} uptime_sec={elapsed:.1f} log={log_path}"
+            f"[SUMMARY] mode={current_mode} frames={frame_count} avg_fps={avg_fps:.2f} "
+            f"reconnects={reconnects} failovers={failovers} uptime_sec={elapsed:.1f} log={log_path}"
         )
 
     return 0
