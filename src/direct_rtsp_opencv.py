@@ -5,6 +5,7 @@ import sys
 import time
 from pathlib import Path
 from urllib.parse import quote
+from datetime import datetime
 
 import cv2
 import numpy as np
@@ -21,6 +22,18 @@ def open_capture(url: str, transport: str) -> cv2.VideoCapture:
     return cv2.VideoCapture(url, cv2.CAP_FFMPEG)
 
 
+def make_logger(log_path: Path):
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _log(message: str) -> None:
+        line = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {message}"
+        print(message)
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+
+    return _log
+
+
 def main() -> int:
     enforce_venv_python()
 
@@ -35,6 +48,15 @@ def main() -> int:
     restart_idle_sec = float(os.getenv("IMOU_DIRECT_NO_FRAME_RESTART_SEC", "8"))
     reconnect_sleep_sec = float(os.getenv("IMOU_DIRECT_RECONNECT_SLEEP_SEC", "1.5"))
     first_frame_timeout_sec = float(os.getenv("IMOU_DIRECT_FIRST_FRAME_TIMEOUT_SEC", "6"))
+    test_seconds = float(os.getenv("IMOU_DIRECT_TEST_SECONDS", "0") or "0")
+    mode_label = os.getenv("IMOU_DIRECT_MODE_LABEL", "public").strip()
+    log_path = Path(
+        os.getenv(
+            "IMOU_DIRECT_LOG_PATH",
+            str(Path(__file__).resolve().parents[1] / "logs" / "direct_public_latest.log"),
+        )
+    )
+    log = make_logger(log_path)
 
     if not host:
         print("Missing IMOU_PUBLIC_RTSP_HOST")
@@ -50,14 +72,15 @@ def main() -> int:
     )
     safe_url = url.replace(safe_password, "***")
 
-    print(f"[INFO] Runtime python: {sys.executable}")
-    print(f"[INFO] Opening direct public RTSP: {safe_url}")
-    print(
-        "[INFO] Health guard:",
-        f"restart if no frame for {restart_idle_sec:.1f}s",
-        f"first-frame-timeout={first_frame_timeout_sec:.1f}s",
+    log(f"[INFO] Runtime python: {sys.executable}")
+    log(f"[INFO] Mode={mode_label} Opening direct RTSP: {safe_url}")
+    log(
+        f"[INFO] Health guard: restart if no frame for {restart_idle_sec:.1f}s "
+        f"first-frame-timeout={first_frame_timeout_sec:.1f}s"
     )
-    print("[INFO] Press 'q' to exit.")
+    if test_seconds > 0:
+        log(f"[INFO] Auto-exit test mode after {test_seconds:.1f}s")
+    log("[INFO] Press 'q' to exit.")
 
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     frame_count = 0
@@ -69,35 +92,39 @@ def main() -> int:
     def reopen(reason: str) -> cv2.VideoCapture | None:
         nonlocal reconnects, last_ok
         reconnects += 1
-        print(f"[WARN] Reopening stream ({reason}) attempt #{reconnects}")
+        log(f"[WARN] Reopening stream ({reason}) attempt #{reconnects}")
         if cap is not None:
             cap.release()
         time.sleep(reconnect_sleep_sec)
         new_cap = open_capture(url, transport)
         if not new_cap.isOpened():
-            print(f"[WARN] Reopen failed: {safe_url}")
+            log(f"[WARN] Reopen failed: {safe_url}")
             return None
         probe_start = time.monotonic()
         while time.monotonic() - probe_start < first_frame_timeout_sec:
             ok, frame = new_cap.read()
             if ok and frame is not None:
                 last_ok = time.monotonic()
-                print("[INFO] Reopen success.")
+                log("[INFO] Reopen success.")
                 return new_cap
             if (cv2.waitKey(20) & 0xFF) == ord("q"):
                 new_cap.release()
                 return None
-        print("[WARN] Reopen got no first frame in time.")
+        log("[WARN] Reopen got no first frame in time.")
         new_cap.release()
         return None
 
     cap = open_capture(url, transport)
     if not cap.isOpened():
-        print(f"[ERROR] Failed to open stream: {safe_url}")
+        log(f"[ERROR] Failed to open stream: {safe_url}")
         return 1
 
     try:
         while True:
+            now = time.monotonic()
+            if test_seconds > 0 and now - started >= test_seconds:
+                log("[INFO] Test duration reached, exiting viewer.")
+                break
             if cap is None or not cap.isOpened():
                 cap = reopen("capture-not-open")
                 if cap is None:
@@ -188,6 +215,12 @@ def main() -> int:
         if cap is not None:
             cap.release()
         cv2.destroyAllWindows()
+        elapsed = max(time.monotonic() - started, 1e-6)
+        avg_fps = frame_count / elapsed
+        log(
+            f"[SUMMARY] mode={mode_label} frames={frame_count} avg_fps={avg_fps:.2f} "
+            f"reconnects={reconnects} uptime_sec={elapsed:.1f} log={log_path}"
+        )
 
     return 0
 
