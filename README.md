@@ -24,6 +24,13 @@ Multi-camera IMOU RTSP viewer for LAN and worldwide access, with automatic targe
 
 ## Quick Start
 
+Recommended operator entrypoint:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_control_panel.bat
+```
+
 Single camera:
 
 ```bat
@@ -114,6 +121,8 @@ Important note:
   - Default single-camera entrypoint, currently points to `cam1`
 - [`run_system_health_check.bat`](./run_system_health_check.bat)
   - Validate LAN, DDNS, and public paths with TCP and RTSP first-frame checks
+- [`run_control_panel.bat`](./run_control_panel.bat)
+  - Desktop control panel for launching cameras, selecting mode, editing common settings, and running health checks
 - [`src/direct_rtsp_opencv.py`](./src/direct_rtsp_opencv.py)
   - Single-camera live viewer with reconnect logic
 - [`src/multi_camera_view.py`](./src/multi_camera_view.py)
@@ -160,6 +169,7 @@ Operational and architecture documents live in [`docs`](./docs):
 - [`docs/13-incident-runbook.md`](./docs/13-incident-runbook.md)
 - [`docs/14-final-acceptance-checklist.md`](./docs/14-final-acceptance-checklist.md)
 - [`docs/15-cam3-cam4-rollout-template.md`](./docs/15-cam3-cam4-rollout-template.md)
+- [`docs/16-ui-control-panel-plan.md`](./docs/16-ui-control-panel-plan.md)
 
 ## Roadmap
 

@@ -25,8 +25,9 @@ Current operator-facing entrypoints:
 14. [13-incident-runbook.md](./13-incident-runbook.md)
 15. [14-final-acceptance-checklist.md](./14-final-acceptance-checklist.md)
 16. [15-cam3-cam4-rollout-template.md](./15-cam3-cam4-rollout-template.md)
-17. [multi-camera-runbook.md](./multi-camera-runbook.md)
-18. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
+17. [16-ui-control-panel-plan.md](./16-ui-control-panel-plan.md)
+18. [multi-camera-runbook.md](./multi-camera-runbook.md)
+19. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
 
 ## Working Model
 
