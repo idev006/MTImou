@@ -34,7 +34,7 @@ The first UI release will provide:
 
 ## Technical Approach
 
-- Use `tkinter`
+- Use `PySide6`
 - Run only with project `.venv`
 - Reuse existing scripts and config files
 - Update only local operator config in `camera.env.bat`

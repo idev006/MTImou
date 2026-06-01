@@ -19,6 +19,7 @@ Multi-camera IMOU RTSP viewer for LAN and worldwide access, with automatic targe
 
 - Always use project Python only:
   - `F:\programming\python\MTImou\.venv\Scripts\python.exe`
+- Desktop control panel uses `PySide6` installed in the same `.venv`
 - Camera secrets and runtime defaults live in `camera.env.bat`
 - Camera registry lives in [`cameras.json`](./cameras.json)
 
