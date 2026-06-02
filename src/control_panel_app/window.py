@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import QProcess, QSettings, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
@@ -42,6 +44,7 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
+        self.setWindowModified(False)
         self.resize(1360, 860)
         self.setMinimumSize(860, 620)
         self.ui_settings = QSettings("MTImou", "ControlPanel")
@@ -96,6 +99,7 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         self.inventory_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.inventory_table.setAlternatingRowColors(True)
         self.inventory_table.verticalHeader().setVisible(False)
+        self.inventory_table.itemChanged.connect(self._on_inventory_item_changed)
         self.password_rows_host = QWidget()
         self.password_rows_layout = QVBoxLayout(self.password_rows_host)
         self.password_rows_layout.setContentsMargins(0, 0, 0, 0)
@@ -120,6 +124,9 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         self.bulk_focus_combo = QComboBox()
         self.bulk_focus_combo.addItems(["No change", "0", "1"])
         self.collapsible_sections: dict[str, CollapsibleSection] = {}
+        self.inventory_dirty = False
+        self._suspend_inventory_dirty_tracking = False
+        self._action_cooldowns: dict[str, float] = {}
 
         self._build_ui()
         self._apply_styles()
@@ -705,5 +712,31 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         self._update_dashboard_breakpoint()
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
+        if not self._ensure_inventory_ready("close the control panel"):
+            event.ignore()
+            return
         self._save_ui_state()
         super().closeEvent(event)
+
+    def _set_inventory_dirty(self, dirty: bool, *, reason: str = "") -> None:
+        self.inventory_dirty = dirty
+        self.setWindowModified(dirty)
+        if dirty:
+            self._set_status(reason or "Camera inventory has unsaved changes")
+        else:
+            self._set_status("Camera inventory saved")
+
+    def _on_inventory_item_changed(self, _item) -> None:
+        if self._suspend_inventory_dirty_tracking:
+            return
+        self._set_inventory_dirty(True, reason="Camera inventory changed; save before launch/reload")
+
+    def _guard_action(self, action_key: str, *, cooldown_sec: float, message: str) -> bool:
+        now = time.monotonic()
+        last = self._action_cooldowns.get(action_key, 0.0)
+        if now - last < cooldown_sec:
+            self.append_output(f"[WARN] Ignored repeated action: {message}")
+            self._set_status(message)
+            return False
+        self._action_cooldowns[action_key] = now
+        return True

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QProcess, Qt
+from PySide6.QtCore import QItemSelectionModel, QProcess, Qt
 from PySide6.QtWidgets import QApplication, QLineEdit, QMessageBox
 
 from control_panel_app.components import CameraWizardDialog, PresetDialog
@@ -9,6 +9,69 @@ from mtimou_v2.app_state import OperatorSettingsState
 
 
 class ControlPanelActionsMixin:
+    def _prompt_unsaved_inventory_decision(self, action_label: str) -> str:
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(WINDOW_TITLE)
+        dialog.setIcon(QMessageBox.Warning)
+        dialog.setText("Camera inventory has unsaved changes.")
+        dialog.setInformativeText(f"Do you want to save before you {action_label}?")
+        save_button = dialog.addButton("Save", QMessageBox.AcceptRole)
+        discard_button = dialog.addButton("Discard", QMessageBox.DestructiveRole)
+        cancel_button = dialog.addButton("Cancel", QMessageBox.RejectRole)
+        dialog.setDefaultButton(save_button)
+        dialog.exec()
+        clicked = dialog.clickedButton()
+        if clicked is save_button:
+            return "save"
+        if clicked is discard_button:
+            return "discard"
+        return "cancel"
+
+    def _ensure_inventory_ready(self, action_label: str) -> bool:
+        if not getattr(self, "inventory_dirty", False):
+            return True
+        decision = self._prompt_unsaved_inventory_decision(action_label)
+        if decision == "save":
+            return self.save_camera_inventory()
+        if decision == "discard":
+            self.reload_settings(confirm_dirty=False)
+            return True
+        self.append_output(f"[INFO] Cancelled action: {action_label}")
+        self._set_status(f"Cancelled action: {action_label}")
+        return False
+
+    def _resolve_selected_preset(self):
+        preset_name = str(self.preset_combo.currentData() or "").strip()
+        if not preset_name:
+            QMessageBox.information(self, WINDOW_TITLE, "Choose a preset first.")
+            return None
+        preset = next((item for item in self.vm.state.selection_presets if item.name == preset_name), None)
+        if preset is None:
+            QMessageBox.warning(self, WINDOW_TITLE, "Preset not found.")
+            return None
+        return preset
+
+    def _select_camera_ids_in_table(self, camera_ids: list[str]) -> None:
+        wanted = set(camera_ids)
+        if not wanted:
+            self.camera_table.clearSelection()
+            self._refresh_selection_summary()
+            return
+        if self.camera_search_edit.text().strip():
+            self.camera_search_edit.clear()
+        if self.group_filter_combo.currentText().strip() != "All Groups":
+            self.group_filter_combo.setCurrentText("All Groups")
+        if self.tier_filter_combo.currentText().strip() != "All Tiers":
+            self.tier_filter_combo.setCurrentText("All Tiers")
+        self._apply_camera_table_filters()
+        self.camera_table.clearSelection()
+        for row in range(self.camera_table.rowCount()):
+            item = self.camera_table.item(row, 0)
+            if item is not None and str(item.data(Qt.UserRole)) in wanted:
+                index = self.camera_table.model().index(row, 0)
+                self.camera_table.selectionModel().select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
+        self._refresh_selection_summary()
+
     def open_add_camera_wizard(self) -> None:
         next_camera_id, next_public_port = self._next_camera_seed()
         public_host = self.vm.state.camera_editor_entries[0].public_host if self.vm.state.camera_editor_entries else "125.27.213.148"
@@ -46,6 +109,7 @@ class ControlPanelActionsMixin:
         )
         self.vm.state.camera_editor_entries.append(entry)
         self._refresh_inventory_table()
+        self._set_inventory_dirty(True, reason="Added draft camera inventory changes")
         self.append_output(f"[INFO] Added wizard camera row for {entry.camera_id}")
 
     def add_camera_inventory_row(self) -> None:
@@ -57,6 +121,7 @@ class ControlPanelActionsMixin:
         entry = self.vm.new_camera_entry(existing_ids)
         self.vm.state.camera_editor_entries.append(entry)
         self._refresh_inventory_table()
+        self._set_inventory_dirty(True, reason="Added draft camera inventory changes")
         self.append_output(f"[INFO] Added draft camera row for {entry.camera_id}")
 
     def remove_selected_inventory_rows(self) -> None:
@@ -67,6 +132,7 @@ class ControlPanelActionsMixin:
         for row in selected_rows:
             del self.vm.state.camera_editor_entries[row]
         self._refresh_inventory_table()
+        self._set_inventory_dirty(True, reason="Removed camera inventory rows")
         self.append_output(f"[INFO] Removed {len(selected_rows)} draft camera row(s)")
 
     def apply_bulk_edit_to_inventory(self) -> None:
@@ -95,6 +161,7 @@ class ControlPanelActionsMixin:
                 item = self.inventory_table.item(row, 12)
                 if item is not None:
                     item.setText(focus_value)
+        self._set_inventory_dirty(True, reason="Bulk-edited camera inventory")
         self.append_output(f"[INFO] Applied bulk edit to {len(selected_rows)} row(s)")
         self._set_status(f"Bulk edited {len(selected_rows)} inventory row(s)")
 
@@ -108,11 +175,12 @@ class ControlPanelActionsMixin:
             if item is not None:
                 item.setCheckState(Qt.Checked if enabled else Qt.Unchecked)
                 item.setText("Yes" if enabled else "No")
+        self._set_inventory_dirty(True, reason="Changed enabled state in camera inventory")
         action = "enabled" if enabled else "disabled"
         self.append_output(f"[INFO] Bulk {action} {len(selected_rows)} row(s)")
         self._set_status(f"Bulk {action} {len(selected_rows)} row(s)")
 
-    def save_camera_inventory(self) -> None:
+    def save_camera_inventory(self) -> bool:
         entries = []
         try:
             for row in range(self.inventory_table.rowCount()):
@@ -120,7 +188,7 @@ class ControlPanelActionsMixin:
             self._validate_inventory_entries(entries)
         except ValueError as exc:
             QMessageBox.warning(self, WINDOW_TITLE, str(exc))
-            return
+            return False
 
         self.vm.save_camera_inventory(entries)
         self._rebuild_password_fields()
@@ -130,10 +198,12 @@ class ControlPanelActionsMixin:
         self._refresh_camera_table()
         self._refresh_inventory_table()
         self._update_metric_cards()
+        self._set_inventory_dirty(False)
         self.append_output("[INFO] Saved camera inventory to cameras.json")
         self._set_status("Saved camera inventory")
+        return True
 
-    def save_settings(self) -> None:
+    def save_settings(self) -> bool:
         new_state = OperatorSettingsState(
             target_mode=self.mode_combo.currentText().strip() or "auto",
             ddns_host=self.ddns_edit.text().strip(),
@@ -155,8 +225,11 @@ class ControlPanelActionsMixin:
         self._update_metric_cards()
         self.append_output(f"[INFO] Saved settings to {ENV_PATH}")
         self._set_status(f"Saved settings to {ENV_PATH}")
+        return True
 
-    def reload_settings(self) -> None:
+    def reload_settings(self, *, confirm_dirty: bool = True) -> bool:
+        if confirm_dirty and not self._ensure_inventory_ready("reload settings"):
+            return False
         self.vm.load()
         self.mode_combo.setCurrentText(self.vm.state.target_mode or "auto")
         self.ddns_edit.setText(self.vm.state.ddns_host)
@@ -166,12 +239,22 @@ class ControlPanelActionsMixin:
         self._refresh_camera_table()
         self._refresh_inventory_table()
         self._update_metric_cards()
+        self._set_inventory_dirty(False)
         self.append_output("[INFO] Reloaded settings from camera.env.bat")
         self._set_status("Reloaded settings")
+        return True
 
     def _launch_camera_ids(self, camera_ids: list[str], *, high_fps: bool = False) -> None:
         if not camera_ids:
             QMessageBox.warning(self, WINDOW_TITLE, "Please select one or more cameras first.")
+            return
+        if not self._guard_action(
+            f"launch:{'highfps' if high_fps else 'normal'}:{','.join(camera_ids)}",
+            cooldown_sec=2.0,
+            message="Launch ignored because the same action was just triggered",
+        ):
+            return
+        if not self._ensure_inventory_ready("launch viewers"):
             return
         self.save_settings()
         if high_fps:
@@ -188,6 +271,10 @@ class ControlPanelActionsMixin:
         self._launch_camera_ids(self.selected_camera_ids(), high_fps=True)
 
     def launch_all_cameras(self) -> None:
+        if not self._guard_action("launch:all", cooldown_sec=2.0, message="Launch ignored because all-enabled view was just triggered"):
+            return
+        if not self._ensure_inventory_ready("launch all enabled cameras"):
+            return
         self.save_settings()
         ids, result = self.vm.launch_all()
         if not ids:
@@ -199,6 +286,10 @@ class ControlPanelActionsMixin:
             self._set_status(status)
 
     def launch_critical_cameras(self) -> None:
+        if not self._guard_action("launch:critical", cooldown_sec=2.0, message="Launch ignored because critical view was just triggered"):
+            return
+        if not self._ensure_inventory_ready("launch critical cameras"):
+            return
         self.save_settings()
         ids, result = self.vm.launch_tier("critical", high_fps=False)
         if not ids:
@@ -210,6 +301,10 @@ class ControlPanelActionsMixin:
             self._set_status(status)
 
     def launch_critical_cameras_high_fps(self) -> None:
+        if not self._guard_action("launch:critical:highfps", cooldown_sec=2.0, message="Launch ignored because critical high-FPS view was just triggered"):
+            return
+        if not self._ensure_inventory_ready("launch critical cameras in high-FPS mode"):
+            return
         self.save_settings()
         ids, result = self.vm.launch_tier("critical", high_fps=True)
         if not ids:
@@ -224,6 +319,10 @@ class ControlPanelActionsMixin:
         group_name = self.group_filter_combo.currentText().strip()
         if not group_name or group_name == "All Groups":
             QMessageBox.information(self, WINDOW_TITLE, "Choose a specific group in the group filter first.")
+            return
+        if not self._guard_action(f"launch:group:{group_name}", cooldown_sec=2.0, message=f"Launch ignored because group {group_name} was just triggered"):
+            return
+        if not self._ensure_inventory_ready(f"launch group {group_name}"):
             return
         self.save_settings()
         ids, result = self.vm.launch_group(group_name, high_fps=False)
@@ -240,6 +339,10 @@ class ControlPanelActionsMixin:
         if not group_name or group_name == "All Groups":
             QMessageBox.information(self, WINDOW_TITLE, "Choose a specific group in the group filter first.")
             return
+        if not self._guard_action(f"launch:group:{group_name}:highfps", cooldown_sec=2.0, message=f"Launch ignored because high-FPS group {group_name} was just triggered"):
+            return
+        if not self._ensure_inventory_ready(f"launch group {group_name} in high-FPS mode"):
+            return
         self.save_settings()
         ids, result = self.vm.launch_group(group_name, high_fps=True)
         if not ids:
@@ -253,6 +356,8 @@ class ControlPanelActionsMixin:
     def run_health_check(self) -> None:
         if self.health_process is not None:
             QMessageBox.information(self, WINDOW_TITLE, "Health check is already running.")
+            return
+        if not self._ensure_inventory_ready("run health check"):
             return
         self.save_settings()
         self.append_output("[INFO] Running system health check...")
@@ -275,6 +380,8 @@ class ControlPanelActionsMixin:
     def run_source_capability_check(self) -> None:
         if self.source_process is not None:
             QMessageBox.information(self, WINDOW_TITLE, "Source capability check is already running.")
+            return
+        if not self._ensure_inventory_ready("run source capability check"):
             return
         self.save_settings()
         camera_ids = self.selected_camera_ids()
@@ -327,6 +434,16 @@ class ControlPanelActionsMixin:
         if dialog.exec() != dialog.Accepted:
             return
         payload = dialog.values()
+        existing = next((item for item in self.vm.state.selection_presets if item.name == payload["name"]), None)
+        if existing is not None:
+            overwrite = QMessageBox.question(
+                self,
+                WINDOW_TITLE,
+                f"Preset '{payload['name']}' already exists. Overwrite it?",
+            )
+            if overwrite != QMessageBox.Yes:
+                self.append_output(f"[INFO] Preset overwrite cancelled for '{payload['name']}'")
+                return
         try:
             self.vm.save_preset(
                 payload["name"],
@@ -342,56 +459,44 @@ class ControlPanelActionsMixin:
         self._set_status(f"Saved preset {payload['name']}")
 
     def apply_selected_preset(self) -> None:
-        preset_name = str(self.preset_combo.currentData() or "").strip()
-        if not preset_name:
-            QMessageBox.information(self, WINDOW_TITLE, "Choose a preset first.")
-            return
-        preset = next((item for item in self.vm.state.selection_presets if item.name == preset_name), None)
+        preset = self._resolve_selected_preset()
         if preset is None:
-            QMessageBox.warning(self, WINDOW_TITLE, "Preset not found.")
             return
-        self.camera_table.clearSelection()
-        wanted = set(preset.camera_ids)
-        for row in range(self.camera_table.rowCount()):
-            if self.camera_table.isRowHidden(row):
-                continue
-            item = self.camera_table.item(row, 0)
-            if item is not None and str(item.data(Qt.UserRole)) in wanted:
-                self.camera_table.selectRow(row)
-        self._refresh_selection_summary()
+        self._select_camera_ids_in_table(preset.camera_ids)
         self.append_output(
-            f"[INFO] Applied preset '{preset_name}'"
+            f"[INFO] Applied preset '{preset.name}'"
             + (f" mode={preset.launch_mode}" if preset.launch_mode else "")
             + (f" description={preset.description}" if preset.description else "")
         )
 
     def run_selected_preset(self) -> None:
-        preset_name = str(self.preset_combo.currentData() or "").strip()
-        if not preset_name:
-            QMessageBox.information(self, WINDOW_TITLE, "Choose a preset first.")
-            return
-        preset = next((item for item in self.vm.state.selection_presets if item.name == preset_name), None)
+        preset = self._resolve_selected_preset()
         if preset is None:
             return
         self.apply_selected_preset()
-        camera_ids = self.selected_camera_ids()
-        if not camera_ids:
+        if not self._guard_action(f"preset:{preset.name}:{preset.launch_mode}", cooldown_sec=2.0, message=f"Launch ignored because preset {preset.name} was just triggered"):
+            return
+        if not self._ensure_inventory_ready(f"run preset {preset.name}"):
             return
         self.save_settings()
         if preset.launch_mode == "high-fps":
-            message, status = self.vm.launch_selected_high_fps(camera_ids)
+            message, status = self.vm.launch_selected_high_fps(list(preset.camera_ids))
         else:
-            message, status = self.vm.launch_selected(camera_ids)
+            message, status = self.vm.launch_selected(list(preset.camera_ids))
         self.append_output(message)
         self._set_status(status)
 
     def run_selected_preset_high_fps(self) -> None:
+        preset = self._resolve_selected_preset()
+        if preset is None:
+            return
         self.apply_selected_preset()
-        camera_ids = self.selected_camera_ids()
-        if not camera_ids:
+        if not self._guard_action(f"preset:{preset.name}:highfps", cooldown_sec=2.0, message=f"Launch ignored because preset {preset.name} high-FPS was just triggered"):
+            return
+        if not self._ensure_inventory_ready(f"run preset {preset.name} in high-FPS mode"):
             return
         self.save_settings()
-        message, status = self.vm.launch_selected_high_fps(camera_ids)
+        message, status = self.vm.launch_selected_high_fps(list(preset.camera_ids))
         self.append_output(message)
         self._set_status(status)
 
@@ -430,7 +535,11 @@ class ControlPanelActionsMixin:
             self.open_logs_folder()
 
     def open_logs_folder(self) -> None:
+        if not self._guard_action("open:logs", cooldown_sec=1.0, message="Open Logs ignored because the folder was just opened"):
+            return
         self.vm.open_logs_folder()
 
     def open_readme(self) -> None:
+        if not self._guard_action("open:readme", cooldown_sec=1.0, message="Open README ignored because it was just opened"):
+            return
         self.vm.open_readme()

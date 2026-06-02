@@ -35,15 +35,27 @@ class BatchEnvSettingsStore:
         lines: list[str] = []
         values: dict[str, str] = {}
         if self.env_path.exists():
-            lines = self.env_path.read_text(encoding="ascii", errors="ignore").splitlines()
-            for line in lines:
-                stripped = line.strip()
-                if stripped.lower().startswith("set ") and "=" in stripped:
-                    payload = stripped[4:]
-                    if payload.startswith('"') and payload.endswith('"'):
-                        payload = payload[1:-1]
-                    key, value = payload.split("=", 1)
-                    values[key.strip()] = unescape_batch_value(value.strip())
+            previous_blank = False
+            with self.env_path.open("r", encoding="ascii", errors="ignore") as handle:
+                for raw_line in handle:
+                    line = raw_line.rstrip("\r\n")
+                    stripped = line.strip()
+                    if not stripped:
+                        # Keep at most a single separator blank line in memory, and
+                        # never allow pathological blank-line growth to bloat the file
+                        # on the next save.
+                        if lines and not previous_blank:
+                            lines.append("")
+                        previous_blank = True
+                        continue
+                    previous_blank = False
+                    lines.append(line)
+                    if stripped.lower().startswith("set ") and "=" in stripped:
+                        payload = stripped[4:]
+                        if payload.startswith('"') and payload.endswith('"'):
+                            payload = payload[1:-1]
+                        key, value = payload.split("=", 1)
+                        values[key.strip()] = unescape_batch_value(value.strip())
         return SettingsDocument(lines=lines, values=values)
 
     def save_document(self, document: SettingsDocument, updates: dict[str, str]) -> SettingsDocument:

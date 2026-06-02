@@ -130,33 +130,37 @@ class ControlPanelStateMixin:
 
     def _refresh_inventory_table(self) -> None:
         entries = self.vm.state.camera_editor_entries
-        self.inventory_table.setRowCount(len(entries))
-        for row_index, entry in enumerate(entries):
-            enabled_item = QTableWidgetItem("Yes" if entry.enabled else "No")
-            enabled_item.setFlags(enabled_item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable)
-            enabled_item.setCheckState(Qt.Checked if entry.enabled else Qt.Unchecked)
-            enabled_item.setTextAlignment(Qt.AlignCenter)
-            self.inventory_table.setItem(row_index, 0, enabled_item)
+        self._suspend_inventory_dirty_tracking = True
+        try:
+            self.inventory_table.setRowCount(len(entries))
+            for row_index, entry in enumerate(entries):
+                enabled_item = QTableWidgetItem("Yes" if entry.enabled else "No")
+                enabled_item.setFlags(enabled_item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable)
+                enabled_item.setCheckState(Qt.Checked if entry.enabled else Qt.Unchecked)
+                enabled_item.setTextAlignment(Qt.AlignCenter)
+                self.inventory_table.setItem(row_index, 0, enabled_item)
 
-            values = [
-                entry.camera_id,
-                entry.name,
-                entry.group_name,
-                entry.tier,
-                entry.lan_host,
-                str(entry.lan_port),
-                entry.ddns_host,
-                str(entry.ddns_port),
-                entry.public_host,
-                str(entry.public_port),
-                entry.remote_wall_subtype,
-                entry.remote_focus_subtype,
-                entry.password_env_name,
-            ]
-            for offset, value in enumerate(values, start=1):
-                item = QTableWidgetItem(value)
-                self.inventory_table.setItem(row_index, offset, item)
-        self.inventory_table.resizeRowsToContents()
+                values = [
+                    entry.camera_id,
+                    entry.name,
+                    entry.group_name,
+                    entry.tier,
+                    entry.lan_host,
+                    str(entry.lan_port),
+                    entry.ddns_host,
+                    str(entry.ddns_port),
+                    entry.public_host,
+                    str(entry.public_port),
+                    entry.remote_wall_subtype,
+                    entry.remote_focus_subtype,
+                    entry.password_env_name,
+                ]
+                for offset, value in enumerate(values, start=1):
+                    item = QTableWidgetItem(value)
+                    self.inventory_table.setItem(row_index, offset, item)
+            self.inventory_table.resizeRowsToContents()
+        finally:
+            self._suspend_inventory_dirty_tracking = False
 
     def _inventory_row_to_entry(self, row: int):
         from mtimou_v2.app_state import CameraEditorEntry

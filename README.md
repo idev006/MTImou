@@ -183,6 +183,21 @@ The control panel now lets the operator:
 - work with collapsible settings and inventory sections
 - reopen the UI with the last window size, tab, and section state restored
 
+## Control Panel Safety Guards
+
+The control panel now includes operator-safety protections for repeated clicks and draft changes:
+
+- launch buttons use a short cooldown so repeated clicks do not spawn duplicate viewer batches immediately
+- preset execution now runs against the preset's stored `camera_ids`, even if the table currently has search/group/tier filters applied
+- if `Camera Management` has unsaved changes, the UI prompts `Save / Discard / Cancel` before:
+  - reloading settings
+  - launching viewers
+  - running health/source checks
+  - closing the control panel
+- saving a preset with an existing name now asks for overwrite confirmation
+- `Open Logs` and `Open README` are debounced to avoid spamming duplicate OS windows
+- `camera.env.bat` is loaded in a streaming, compacting way so pathological blank-line growth cannot make the control panel unusable
+
 ## Public / Worldwide Access
 
 This project already supports worldwide viewing through router port forwarding.
