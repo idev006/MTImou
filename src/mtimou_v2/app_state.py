@@ -25,6 +25,8 @@ class PasswordEntry:
 class SelectionPreset:
     name: str
     camera_ids: list[str]
+    description: str = ""
+    launch_mode: str = "normal"
 
 
 @dataclass(slots=True)

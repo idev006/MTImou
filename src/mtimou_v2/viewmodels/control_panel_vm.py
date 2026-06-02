@@ -67,7 +67,7 @@ class ControlPanelViewModel:
         self._apply_env_values_to_process()
         return self.state
 
-    def save_preset(self, name: str, camera_ids: list[str]) -> OperatorSettingsState:
+    def save_preset(self, name: str, camera_ids: list[str], *, description: str = "", launch_mode: str = "normal") -> OperatorSettingsState:
         clean_name = name.strip()
         if not clean_name:
             raise ValueError("Preset name is required.")
@@ -75,7 +75,14 @@ class ControlPanelViewModel:
         if not normalized_ids:
             raise ValueError("Select one or more cameras before saving a preset.")
         presets = [preset for preset in self.state.selection_presets if preset.name != clean_name]
-        presets.append(SelectionPreset(name=clean_name, camera_ids=normalized_ids))
+        presets.append(
+            SelectionPreset(
+                name=clean_name,
+                camera_ids=normalized_ids,
+                description=description.strip(),
+                launch_mode=launch_mode.strip() or "normal",
+            )
+        )
         self.preset_document = self.preset_store.save_presets(presets)
         _, reloaded = self.preset_store.load_presets()
         self.state.selection_presets = reloaded
@@ -144,6 +151,15 @@ class ControlPanelViewModel:
         self.services.launch_batch(batch_name, ids)
         mode_label = "high-FPS " if high_fps else ""
         return ids, (f"[INFO] Launched {batch_name} {' '.join(ids)}", f"Launched {mode_label}{tier} cameras")
+
+    def launch_group(self, group_name: str, *, high_fps: bool = False) -> tuple[list[str], tuple[str, str] | None]:
+        ids = [camera.camera_id for camera in self.state.cameras if camera.enabled and camera.group_name == group_name]
+        if not ids:
+            return ids, None
+        batch_name = "run_multi_camera_high_fps.bat" if high_fps else "run_multi_camera_stable.bat"
+        self.services.launch_batch(batch_name, ids)
+        mode_label = "high-FPS " if high_fps else ""
+        return ids, (f"[INFO] Launched {batch_name} {' '.join(ids)}", f"Launched {mode_label}group {group_name}")
 
     def open_logs_folder(self) -> None:
         self.services.open_logs_folder()

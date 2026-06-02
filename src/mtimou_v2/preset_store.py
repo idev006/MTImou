@@ -29,7 +29,14 @@ class PresetStore:
             camera_ids = [str(camera_id).strip() for camera_id in item.get("camera_ids", []) if str(camera_id).strip()]
             if not name or not camera_ids:
                 continue
-            presets.append(SelectionPreset(name=name, camera_ids=camera_ids))
+            presets.append(
+                SelectionPreset(
+                    name=name,
+                    camera_ids=camera_ids,
+                    description=str(item.get("description", "")).strip(),
+                    launch_mode=str(item.get("launch_mode", "normal")).strip() or "normal",
+                )
+            )
         presets.sort(key=lambda preset: preset.name.lower())
         return document, presets
 
@@ -39,6 +46,8 @@ class PresetStore:
                 {
                     "name": preset.name,
                     "camera_ids": list(preset.camera_ids),
+                    "description": preset.description,
+                    "launch_mode": preset.launch_mode,
                 }
                 for preset in sorted(presets, key=lambda item: item.name.lower())
             ]

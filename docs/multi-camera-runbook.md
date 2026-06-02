@@ -109,9 +109,22 @@ Operator shortcuts now available in the control panel:
 - filter by group
 - filter by tier
 - launch `critical` tier cameras directly
+- launch the currently filtered group directly
 - save current selection as a preset
+- attach a description and default launch mode to presets
+- run a preset directly using its saved default mode
 - run a preset in normal or high-FPS mode
+- bulk enable/disable inventory rows
 - bulk-edit `group`, `tier`, `wall`, and `focus` policy in inventory
+- monitor enabled counts for `critical`, `standard`, and `archive` from dashboard cards
+
+Suggested operator workflow for larger deployments:
+
+1. Filter by `group` or `tier`
+2. Launch a wall view for overview
+3. Save recurring camera sets as presets
+4. Use `High FPS` only for smaller focus sets or critical incidents
+5. Disable archive cameras from day-to-day operations if they are not needed live
 
 Suggested groups:
 

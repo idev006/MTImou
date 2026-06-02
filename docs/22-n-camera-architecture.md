@@ -147,7 +147,11 @@ The control panel should help operators manage large inventories by:
 - group filter
 - tier filter
 - selection presets
+- preset metadata
+- preset launch intent (`normal` / `high-fps`)
 - direct launch by tier
+- direct launch by group
+- bulk enable/disable
 - bulk edit for policy fields
 - grouped selection
 - camera inventory editing

@@ -170,9 +170,15 @@ The control panel now lets the operator:
 - filter cameras by group and tier
 - search large inventories
 - save and reuse selection presets
+- add preset description and default launch mode
 - launch `critical` tier cameras directly
+- launch a filtered group directly
 - bulk-edit group/tier/wall/focus policy in camera management
+- bulk enable or disable selected cameras
+- save presets with `normal` or `high-fps` launch intent
+- run presets directly from the dashboard
 - define wall vs focus stream policy per camera
+- see enabled camera counts by tier on the dashboard
 
 ## Public / Worldwide Access
 
