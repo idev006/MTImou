@@ -22,8 +22,10 @@ Multi-camera IMOU RTSP viewer for LAN and worldwide access, with automatic targe
   - `F:\programming\python\MTImou\.venv\Scripts\python.exe`
 - Desktop control panel uses `PySide6` installed in the same `.venv`
 - Camera secrets and runtime defaults live in `camera.env.bat`
+- Starter local settings are provided in [`camera.env.bat.example`](./camera.env.bat.example)
 - Recommended N-camera password naming: `IMOU_CAM_<CAMERA_ID_UPPER>_PASSWORD`
 - Camera registry lives in [`cameras.json`](./cameras.json)
+- Starter selection presets are provided in [`camera_presets.example.json`](./camera_presets.example.json)
 
 ## Quick Start
 
@@ -50,6 +52,7 @@ What `setup_windows.bat` does:
 - creates `.venv` if needed
 - installs pinned dependencies from [`requirements.txt`](./requirements.txt)
 - creates `camera.env.bat` from [`camera.env.bat.example`](./camera.env.bat.example) if it is missing
+- creates `camera_presets.json` from [`camera_presets.example.json`](./camera_presets.example.json) if it is missing
 - leaves your existing `.venv` and camera config in place if they already exist
 
 Single camera:

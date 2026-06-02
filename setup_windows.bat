@@ -68,6 +68,11 @@ if not exist "camera.env.bat" if exist "camera.env.bat.example" (
   echo [INFO] Created camera.env.bat from camera.env.bat.example
 )
 
+if not exist "camera_presets.json" if exist "camera_presets.example.json" (
+  copy /y "camera_presets.example.json" "camera_presets.json" >nul
+  echo [INFO] Created camera_presets.json from camera_presets.example.json
+)
+
 if not exist "logs" mkdir "logs" >nul 2>nul
 
 echo [INFO] Setup completed.

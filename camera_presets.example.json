@@ -1,0 +1,16 @@
+{
+  "presets": [
+    {
+      "name": "critical-wall",
+      "camera_ids": ["cam1", "cam2"],
+      "description": "Default wall view for critical cameras",
+      "launch_mode": "normal"
+    },
+    {
+      "name": "critical-highfps",
+      "camera_ids": ["cam1", "cam2"],
+      "description": "High-FPS split view for critical cameras",
+      "launch_mode": "high-fps"
+    }
+  ]
+}
