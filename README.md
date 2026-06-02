@@ -29,10 +29,27 @@ Multi-camera IMOU RTSP viewer for LAN and worldwide access, with automatic targe
 
 Recommended operator entrypoint:
 
+First-time setup on Windows:
+
+```bat
+cd /d F:\programming\python\MTImou
+setup_windows.bat
+```
+
+Then open the control panel:
+
 ```bat
 cd /d F:\programming\python\MTImou
 run_control_panel.bat
 ```
+
+What `setup_windows.bat` does:
+
+- finds Python 3.12
+- creates `.venv` if needed
+- installs pinned dependencies from [`requirements.txt`](./requirements.txt)
+- creates `camera.env.bat` from [`camera.env.bat.example`](./camera.env.bat.example) if it is missing
+- leaves your existing `.venv` and camera config in place if they already exist
 
 Single camera:
 
