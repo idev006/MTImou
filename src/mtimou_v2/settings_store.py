@@ -9,6 +9,12 @@ from mtimou_v2.registry import default_password_env_names, load_cameras, target_
 
 
 MAX_ENV_FILE_BYTES = 256 * 1024
+DEFAULT_SINGLE_OVERLAY_TITLE_SCALE = 0.92
+DEFAULT_SINGLE_OVERLAY_META_SCALE = 0.82
+DEFAULT_SINGLE_OVERLAY_SMALL_SCALE = 0.72
+DEFAULT_MULTI_OVERLAY_TITLE_SCALE = 0.62
+DEFAULT_MULTI_OVERLAY_META_SCALE = 0.54
+DEFAULT_MULTI_OVERLAY_SMALL_SCALE = 0.50
 
 
 def unescape_batch_value(value: str) -> str:
@@ -23,6 +29,16 @@ def escape_batch_value(value: str) -> str:
     escaped = escaped.replace("%", "%%")
     escaped = escaped.replace('"', '^"')
     return escaped
+
+
+def parse_float_value(values: dict[str, str], key: str, default: float) -> float:
+    raw = values.get(key, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
 
 
 @dataclass(slots=True)
@@ -119,6 +135,12 @@ class BatchEnvSettingsStore:
             target_mode=values.get("IMOU_TARGET_MODE", "auto") or "auto",
             ddns_host=values.get("IMOU_DDNS_HOST", ""),
             username=values.get("IMOU_CAMERA_USERNAME", "admin") or "admin",
+            single_overlay_title_scale=parse_float_value(values, "IMOU_SINGLE_OVERLAY_TITLE_SCALE", DEFAULT_SINGLE_OVERLAY_TITLE_SCALE),
+            single_overlay_meta_scale=parse_float_value(values, "IMOU_SINGLE_OVERLAY_META_SCALE", DEFAULT_SINGLE_OVERLAY_META_SCALE),
+            single_overlay_small_scale=parse_float_value(values, "IMOU_SINGLE_OVERLAY_SMALL_SCALE", DEFAULT_SINGLE_OVERLAY_SMALL_SCALE),
+            multi_overlay_title_scale=parse_float_value(values, "IMOU_MULTI_OVERLAY_TITLE_SCALE", DEFAULT_MULTI_OVERLAY_TITLE_SCALE),
+            multi_overlay_meta_scale=parse_float_value(values, "IMOU_MULTI_OVERLAY_META_SCALE", DEFAULT_MULTI_OVERLAY_META_SCALE),
+            multi_overlay_small_scale=parse_float_value(values, "IMOU_MULTI_OVERLAY_SMALL_SCALE", DEFAULT_MULTI_OVERLAY_SMALL_SCALE),
         )
         for camera in cameras:
             env_names = default_password_env_names(camera.camera_id)

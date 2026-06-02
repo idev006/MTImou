@@ -38,6 +38,12 @@ class ControlPanelViewModel:
             "IMOU_TARGET_MODE": new_state.target_mode.strip() or "auto",
             "IMOU_DDNS_HOST": new_state.ddns_host.strip(),
             "IMOU_CAMERA_USERNAME": new_state.username.strip() or "admin",
+            "IMOU_SINGLE_OVERLAY_TITLE_SCALE": f"{new_state.single_overlay_title_scale:.2f}",
+            "IMOU_SINGLE_OVERLAY_META_SCALE": f"{new_state.single_overlay_meta_scale:.2f}",
+            "IMOU_SINGLE_OVERLAY_SMALL_SCALE": f"{new_state.single_overlay_small_scale:.2f}",
+            "IMOU_MULTI_OVERLAY_TITLE_SCALE": f"{new_state.multi_overlay_title_scale:.2f}",
+            "IMOU_MULTI_OVERLAY_META_SCALE": f"{new_state.multi_overlay_meta_scale:.2f}",
+            "IMOU_MULTI_OVERLAY_SMALL_SCALE": f"{new_state.multi_overlay_small_scale:.2f}",
         }
         for entry in new_state.password_entries:
             updates[entry.env_name] = entry.value.strip()

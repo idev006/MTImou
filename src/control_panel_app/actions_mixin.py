@@ -208,6 +208,12 @@ class ControlPanelActionsMixin:
             target_mode=self.mode_combo.currentText().strip() or "auto",
             ddns_host=self.ddns_edit.text().strip(),
             username=self.user_edit.text().strip() or "admin",
+            single_overlay_title_scale=self.single_title_scale_spin.value(),
+            single_overlay_meta_scale=self.single_meta_scale_spin.value(),
+            single_overlay_small_scale=self.single_small_scale_spin.value(),
+            multi_overlay_title_scale=self.multi_title_scale_spin.value(),
+            multi_overlay_meta_scale=self.multi_meta_scale_spin.value(),
+            multi_overlay_small_scale=self.multi_small_scale_spin.value(),
             password_entries=[
                 self.vm.state.password_entries[index].__class__(
                     camera_id=self.vm.state.password_entries[index].camera_id,
@@ -234,6 +240,12 @@ class ControlPanelActionsMixin:
         self.mode_combo.setCurrentText(self.vm.state.target_mode or "auto")
         self.ddns_edit.setText(self.vm.state.ddns_host)
         self.user_edit.setText(self.vm.state.username or "admin")
+        self.single_title_scale_spin.setValue(self.vm.state.single_overlay_title_scale)
+        self.single_meta_scale_spin.setValue(self.vm.state.single_overlay_meta_scale)
+        self.single_small_scale_spin.setValue(self.vm.state.single_overlay_small_scale)
+        self.multi_title_scale_spin.setValue(self.vm.state.multi_overlay_title_scale)
+        self.multi_meta_scale_spin.setValue(self.vm.state.multi_overlay_meta_scale)
+        self.multi_small_scale_spin.setValue(self.vm.state.multi_overlay_small_scale)
         self._rebuild_password_fields()
         self._refresh_health_snapshot()
         self._refresh_camera_table()
@@ -243,6 +255,16 @@ class ControlPanelActionsMixin:
         self.append_output("[INFO] Reloaded settings from camera.env.bat")
         self._set_status("Reloaded settings")
         return True
+
+    def restore_overlay_defaults(self) -> None:
+        self.single_title_scale_spin.setValue(0.92)
+        self.single_meta_scale_spin.setValue(0.82)
+        self.single_small_scale_spin.setValue(0.72)
+        self.multi_title_scale_spin.setValue(0.62)
+        self.multi_meta_scale_spin.setValue(0.54)
+        self.multi_small_scale_spin.setValue(0.50)
+        self.append_output("[INFO] Restored default overlay sizes in the form. Save settings to apply them.")
+        self._set_status("Restored default overlay sizes")
 
     def _launch_camera_ids(self, camera_ids: list[str], *, high_fps: bool = False) -> None:
         if not camera_ids:

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -59,6 +60,12 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         self.ddns_edit = QLineEdit()
         self.ddns_edit.textChanged.connect(lambda _value: self._update_metric_cards())
         self.user_edit = QLineEdit()
+        self.single_title_scale_spin = self._create_overlay_spinbox()
+        self.single_meta_scale_spin = self._create_overlay_spinbox()
+        self.single_small_scale_spin = self._create_overlay_spinbox()
+        self.multi_title_scale_spin = self._create_overlay_spinbox()
+        self.multi_meta_scale_spin = self._create_overlay_spinbox()
+        self.multi_small_scale_spin = self._create_overlay_spinbox()
         self.show_passwords_checkbox = QCheckBox("Show passwords")
         self.show_passwords_checkbox.toggled.connect(self.toggle_password_visibility)
         self.open_log_checkbox = QCheckBox("Open logs folder after health check")
@@ -491,13 +498,60 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         self.collapsible_sections["settings/operator"] = self.settings_section
         layout.addWidget(self.settings_section)
 
+        display_body = QWidget()
+        display_layout = QFormLayout(display_body)
+        display_layout.setContentsMargins(16, 18, 16, 16)
+        display_layout.setSpacing(12)
+
+        single_row = QWidget()
+        single_row_layout = QHBoxLayout(single_row)
+        single_row_layout.setContentsMargins(0, 0, 0, 0)
+        single_row_layout.setSpacing(8)
+        single_row_layout.addWidget(QLabel("Title"))
+        single_row_layout.addWidget(self.single_title_scale_spin)
+        single_row_layout.addWidget(QLabel("Meta"))
+        single_row_layout.addWidget(self.single_meta_scale_spin)
+        single_row_layout.addWidget(QLabel("Small"))
+        single_row_layout.addWidget(self.single_small_scale_spin)
+
+        multi_row = QWidget()
+        multi_row_layout = QHBoxLayout(multi_row)
+        multi_row_layout.setContentsMargins(0, 0, 0, 0)
+        multi_row_layout.setSpacing(8)
+        multi_row_layout.addWidget(QLabel("Title"))
+        multi_row_layout.addWidget(self.multi_title_scale_spin)
+        multi_row_layout.addWidget(QLabel("Meta"))
+        multi_row_layout.addWidget(self.multi_meta_scale_spin)
+        multi_row_layout.addWidget(QLabel("Small"))
+        multi_row_layout.addWidget(self.multi_small_scale_spin)
+
+        restore_defaults_button = QPushButton("Restore Display Defaults")
+        restore_defaults_button.clicked.connect(self.restore_overlay_defaults)
+
+        display_layout.addRow("Single / High-FPS", single_row)
+        display_layout.addRow("Multi-camera wall", multi_row)
+        display_layout.addRow("", restore_defaults_button)
+
+        display_notes = QLabel(
+            "Use larger Single / High-FPS values when text is too small in split-view windows. "
+            "Keep Multi-camera wall values lower so overlays do not block the tiled board."
+        )
+        display_notes.setWordWrap(True)
+        display_notes.setStyleSheet("color: #5b6472; font-size: 12px;")
+        display_layout.addRow("", display_notes)
+
+        self.display_section = CollapsibleSection("Viewer Display", display_body)
+        self.collapsible_sections["settings/display"] = self.display_section
+        layout.addWidget(self.display_section)
+
         notes_body = QWidget()
         notes_layout = QVBoxLayout(notes_body)
         notes = QLabel(
             "Auto mode is the normal choice. It prefers LAN when you are at home, then DDNS, then public IP.\n\n"
             "Use DDNS mode when you want to verify remote access specifically.\n\n"
             "Passwords are stored in camera.env.bat and mapped per camera using the environment names shown on the right.\n\n"
-            "If you are chasing FPS, run Source Capability Check first. It tells us whether the camera stream itself is the limit."
+            "If you are chasing FPS, run Source Capability Check first. It tells us whether the camera stream itself is the limit.\n\n"
+            "Overlay sizes are now first-class user settings in this tab. Adjust them here and click Save Settings instead of editing env vars manually."
         )
         notes.setWordWrap(True)
         notes.setStyleSheet("color: #4b5563;")
@@ -717,6 +771,14 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
             return
         self._save_ui_state()
         super().closeEvent(event)
+
+    def _create_overlay_spinbox(self) -> QDoubleSpinBox:
+        spin = QDoubleSpinBox()
+        spin.setRange(0.30, 2.00)
+        spin.setDecimals(2)
+        spin.setSingleStep(0.02)
+        spin.setMinimumWidth(80)
+        return spin
 
     def _set_inventory_dirty(self, dirty: bool, *, reason: str = "") -> None:
         self.inventory_dirty = dirty

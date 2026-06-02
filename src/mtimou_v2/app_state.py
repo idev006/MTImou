@@ -56,6 +56,12 @@ class OperatorSettingsState:
     target_mode: str = "auto"
     ddns_host: str = ""
     username: str = "admin"
+    single_overlay_title_scale: float = 0.92
+    single_overlay_meta_scale: float = 0.82
+    single_overlay_small_scale: float = 0.72
+    multi_overlay_title_scale: float = 0.62
+    multi_overlay_meta_scale: float = 0.54
+    multi_overlay_small_scale: float = 0.50
     password_entries: list[PasswordEntry] = field(default_factory=list)
     cameras: list[CameraListItem] = field(default_factory=list)
     camera_editor_entries: list[CameraEditorEntry] = field(default_factory=list)

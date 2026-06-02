@@ -147,6 +147,15 @@ set IMOU_MULTI_OVERLAY_META_SCALE=0.60
 set IMOU_MULTI_OVERLAY_SMALL_SCALE=0.56
 ```
 
+Operator-friendly path:
+
+- open the control panel
+- go to `Settings`
+- adjust `Viewer Display`
+- click `Save Settings`
+
+This is the recommended way to change overlay text size now. Manual env editing is no longer required for normal use.
+
 Notes:
 
 - Multi-camera remote viewing usually performs better with `subtype=1`
