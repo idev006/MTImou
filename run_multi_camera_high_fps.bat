@@ -13,7 +13,7 @@ if exist "camera.env.bat" (
 )
 
 if "%IMOU_TARGET_MODE%"=="" set "IMOU_TARGET_MODE=public"
-if "%IMOU_REMOTE_SINGLE_SUBTYPE%"=="" set "IMOU_REMOTE_SINGLE_SUBTYPE=1"
+if "%IMOU_REMOTE_SINGLE_SUBTYPE%"=="" set "IMOU_REMOTE_SINGLE_SUBTYPE=0"
 
 "%PY%" "%~dp0src\launch_split_viewers.py" %*
 exit /b %ERRORLEVEL%

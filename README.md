@@ -62,6 +62,13 @@ cd /d F:\programming\python\MTImou
 run_multi_camera_high_fps.bat cam1 cam2
 ```
 
+Source capability check:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_source_capability_check.bat cam1 cam2
+```
+
 Grid behavior:
 
 - `1 camera` -> `1x1`
@@ -115,7 +122,7 @@ run_multi_camera_stable.bat cam1 cam2
 
 ## FPS Tuning
 
-For remote multi-camera viewing, the runtime now defaults to substream on `ddns/public`
+For remote multi-camera tiled viewing, the runtime now defaults to substream on `ddns/public`
 targets to improve FPS and reduce uplink pressure:
 
 - `IMOU_REMOTE_MULTI_SUBTYPE=1` (default)
@@ -132,7 +139,9 @@ Notes:
 - Multi-camera remote viewing usually performs better with `subtype=1`
 - Single-camera remote viewing can stay on `subtype=0` for higher detail
 - Multi-camera viewing now uses parallel camera readers so one stream no longer drags the other down as much
+- `run_multi_camera_high_fps.bat` now defaults to main stream (`subtype=0`) so it does not artificially cap source FPS
 - If you need the highest practical FPS per camera, use `run_multi_camera_high_fps.bat` so each camera runs in its own viewer process
+- Use `run_source_capability_check.bat` to separate camera-source limits from viewer/runtime limits before tuning further
 
 ## Public / Worldwide Access
 
