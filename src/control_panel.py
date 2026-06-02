@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QMainWindow,
     QMessageBox,
@@ -235,7 +236,7 @@ class ControlPanelWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.resize(1360, 860)
-        self.setMinimumSize(1120, 760)
+        self.setMinimumSize(860, 620)
 
         self.vm = ControlPanelViewModel(root_dir=ROOT_DIR, env_path=ENV_PATH)
         self.health_process: QProcess | None = None
@@ -499,6 +500,14 @@ class ControlPanelWindow(QMainWindow):
         toolbar.addAction(readme_action)
 
     def _wrap_scroll(self, content: QWidget) -> QScrollArea:
+        layout = content.layout()
+        if layout is not None:
+            layout.setSizeConstraint(QLayout.SetMinimumSize)
+        content.adjustSize()
+        hint = content.sizeHint()
+        content.setMinimumSize(hint.width(), hint.height())
+        content.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -509,6 +518,7 @@ class ControlPanelWindow(QMainWindow):
 
     def _build_dashboard_tab(self) -> QWidget:
         tab = QWidget()
+        tab.setMinimumSize(1380, 920)
         layout = QGridLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setHorizontalSpacing(14)
@@ -620,6 +630,8 @@ class ControlPanelWindow(QMainWindow):
         layout.addWidget(camera_box, 0, 0, 2, 1)
         layout.addWidget(action_box, 0, 1)
         layout.addWidget(output_box, 1, 1)
+        layout.setColumnMinimumWidth(0, 900)
+        layout.setColumnMinimumWidth(1, 420)
         layout.setColumnStretch(0, 3)
         layout.setColumnStretch(1, 2)
         layout.setRowStretch(1, 1)
@@ -627,6 +639,7 @@ class ControlPanelWindow(QMainWindow):
 
     def _build_settings_tab(self) -> QWidget:
         tab = QWidget()
+        tab.setMinimumSize(980, 760)
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
@@ -659,6 +672,7 @@ class ControlPanelWindow(QMainWindow):
 
     def _build_camera_management_tab(self) -> QWidget:
         tab = QWidget()
+        tab.setMinimumSize(1540, 860)
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
@@ -750,6 +764,7 @@ class ControlPanelWindow(QMainWindow):
 
     def _build_help_tab(self) -> QWidget:
         tab = QWidget()
+        tab.setMinimumSize(900, 720)
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
