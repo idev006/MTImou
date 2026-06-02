@@ -25,9 +25,9 @@ def overlay_style(*, single_view: bool = False) -> dict[str, float | int]:
     import os
 
     prefix = "IMOU_SINGLE_OVERLAY_" if single_view else "IMOU_MULTI_OVERLAY_"
-    default_title_scale = "0.92" if single_view else "0.62"
-    default_meta_scale = "0.82" if single_view else "0.54"
-    default_small_scale = "0.72" if single_view else "0.50"
+    default_title_scale = "1.04" if single_view else "0.56"
+    default_meta_scale = "0.92" if single_view else "0.48"
+    default_small_scale = "0.80" if single_view else "0.44"
     default_title_thickness = "2"
     default_meta_thickness = "2" if single_view else "1"
     default_small_thickness = "2" if single_view else "1"

@@ -6,6 +6,14 @@ from PySide6.QtWidgets import QApplication, QLineEdit, QMessageBox
 from control_panel_app.components import CameraWizardDialog, PresetDialog
 from control_panel_app.constants import ENV_PATH, ROOT_DIR, WINDOW_TITLE
 from mtimou_v2.app_state import OperatorSettingsState
+from mtimou_v2.settings_store import (
+    DEFAULT_MULTI_OVERLAY_META_SCALE,
+    DEFAULT_MULTI_OVERLAY_SMALL_SCALE,
+    DEFAULT_MULTI_OVERLAY_TITLE_SCALE,
+    DEFAULT_SINGLE_OVERLAY_META_SCALE,
+    DEFAULT_SINGLE_OVERLAY_SMALL_SCALE,
+    DEFAULT_SINGLE_OVERLAY_TITLE_SCALE,
+)
 
 
 class ControlPanelActionsMixin:
@@ -257,12 +265,12 @@ class ControlPanelActionsMixin:
         return True
 
     def restore_overlay_defaults(self) -> None:
-        self.single_title_scale_spin.setValue(0.92)
-        self.single_meta_scale_spin.setValue(0.82)
-        self.single_small_scale_spin.setValue(0.72)
-        self.multi_title_scale_spin.setValue(0.62)
-        self.multi_meta_scale_spin.setValue(0.54)
-        self.multi_small_scale_spin.setValue(0.50)
+        self.single_title_scale_spin.setValue(DEFAULT_SINGLE_OVERLAY_TITLE_SCALE)
+        self.single_meta_scale_spin.setValue(DEFAULT_SINGLE_OVERLAY_META_SCALE)
+        self.single_small_scale_spin.setValue(DEFAULT_SINGLE_OVERLAY_SMALL_SCALE)
+        self.multi_title_scale_spin.setValue(DEFAULT_MULTI_OVERLAY_TITLE_SCALE)
+        self.multi_meta_scale_spin.setValue(DEFAULT_MULTI_OVERLAY_META_SCALE)
+        self.multi_small_scale_spin.setValue(DEFAULT_MULTI_OVERLAY_SMALL_SCALE)
         self.append_output("[INFO] Restored default overlay sizes in the form. Save settings to apply them.")
         self._set_status("Restored default overlay sizes")
 
