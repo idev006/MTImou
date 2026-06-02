@@ -116,6 +116,17 @@ class ControlPanelViewModel:
             process_env,
         )
 
+    def source_capability_command(self, camera_ids: list[str] | None = None) -> tuple[str, list[str], dict[str, str]]:
+        process_env = {key: value for key, value in os.environ.items()}
+        arguments = [str(self.root_dir / "src" / "source_capability_check.py")]
+        if camera_ids:
+            arguments.extend(camera_ids)
+        return (
+            str(self.root_dir / ".venv" / "Scripts" / "python.exe"),
+            arguments,
+            process_env,
+        )
+
     def _apply_env_values_to_process(self) -> None:
         if self.document is None:
             return

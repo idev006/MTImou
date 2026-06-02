@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QTableWidgetSelectionRange,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStatusBar,
     QSpinBox,
@@ -182,6 +183,7 @@ class ControlPanelWindow(QMainWindow):
 
         self.vm = ControlPanelViewModel(root_dir=ROOT_DIR, env_path=ENV_PATH)
         self.health_process: QProcess | None = None
+        self.source_process: QProcess | None = None
 
         self.mode_combo = QComboBox()
         self.mode_combo.addItems(MODE_OPTIONS)
@@ -227,7 +229,9 @@ class ControlPanelWindow(QMainWindow):
         self.metric_mode = MetricCard("Target Mode", "blue")
         self.metric_ddns = MetricCard("DDNS Host", "orange")
         self.metric_health = MetricCard("Health Snapshot", "green")
+        self.metric_source = MetricCard("Source FPS Ceiling", "blue")
         self.camera_health_status: dict[str, tuple[str, str]] = {}
+        self.source_capability_status: dict[str, tuple[float, str]] = {}
 
         self._build_ui()
         self._apply_styles()
@@ -369,13 +373,14 @@ class ControlPanelWindow(QMainWindow):
         metric_layout.addWidget(self.metric_mode)
         metric_layout.addWidget(self.metric_ddns)
         metric_layout.addWidget(self.metric_health)
+        metric_layout.addWidget(self.metric_source)
         root_layout.addLayout(metric_layout)
 
         tabs = QTabWidget()
-        tabs.addTab(self._build_dashboard_tab(), "Dashboard")
-        tabs.addTab(self._build_settings_tab(), "Settings")
-        tabs.addTab(self._build_camera_management_tab(), "Camera Management")
-        tabs.addTab(self._build_help_tab(), "Operator Guide")
+        tabs.addTab(self._wrap_scroll(self._build_dashboard_tab()), "Dashboard")
+        tabs.addTab(self._wrap_scroll(self._build_settings_tab()), "Settings")
+        tabs.addTab(self._wrap_scroll(self._build_camera_management_tab()), "Camera Management")
+        tabs.addTab(self._wrap_scroll(self._build_help_tab()), "Operator Guide")
         root_layout.addWidget(tabs, 1)
 
         self.setCentralWidget(central)
@@ -403,9 +408,22 @@ class ControlPanelWindow(QMainWindow):
         logs_action.triggered.connect(self.open_logs_folder)
         toolbar.addAction(logs_action)
 
+        source_action = QAction("Source Capability", self)
+        source_action.triggered.connect(self.run_source_capability_check)
+        toolbar.addAction(source_action)
+
         readme_action = QAction("Open README", self)
         readme_action.triggered.connect(self.open_readme)
         toolbar.addAction(readme_action)
+
+    def _wrap_scroll(self, content: QWidget) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setWidget(content)
+        return scroll
 
     def _build_dashboard_tab(self) -> QWidget:
         tab = QWidget()
@@ -417,7 +435,7 @@ class ControlPanelWindow(QMainWindow):
         camera_box = QGroupBox("Camera Grid")
         camera_layout = QVBoxLayout(camera_box)
 
-        helper = QLabel("Select one or more cameras. The table is optimized for N cameras and keeps network endpoints readable.")
+        helper = QLabel("Select one or more cameras. The table is optimized for N cameras, keeps network endpoints readable, and now carries source-ceiling hints from the latest capability check.")
         helper.setStyleSheet("color: #5b6472; font-size: 12px;")
         helper.setWordWrap(True)
         camera_layout.addWidget(helper)
@@ -463,13 +481,16 @@ class ControlPanelWindow(QMainWindow):
         btn_health = QPushButton("Run Health Check")
         btn_health.clicked.connect(self.run_health_check)
 
+        btn_source = QPushButton("Run Source Capability Check")
+        btn_source.clicked.connect(self.run_source_capability_check)
+
         btn_logs = QPushButton("Open Logs Folder")
         btn_logs.clicked.connect(self.open_logs_folder)
 
         btn_readme = QPushButton("Open Project README")
         btn_readme.clicked.connect(self.open_readme)
 
-        for btn in [btn_selected, btn_selected_high_fps, btn_all, btn_health, btn_logs, btn_readme]:
+        for btn in [btn_selected, btn_selected_high_fps, btn_all, btn_health, btn_source, btn_logs, btn_readme]:
             action_layout.addWidget(btn)
 
         action_layout.addWidget(self.open_log_checkbox)
@@ -510,7 +531,8 @@ class ControlPanelWindow(QMainWindow):
         notes = QLabel(
             "Auto mode is the normal choice. It prefers LAN when you are at home, then DDNS, then public IP.\n\n"
             "Use DDNS mode when you want to verify remote access specifically.\n\n"
-            "Passwords are stored in camera.env.bat and mapped per camera using the environment names shown on the right."
+            "Passwords are stored in camera.env.bat and mapped per camera using the environment names shown on the right.\n\n"
+            "If you are chasing FPS, run Source Capability Check first. It tells us whether the camera stream itself is the limit."
         )
         notes.setWordWrap(True)
         notes.setStyleSheet("color: #4b5563;")
@@ -574,7 +596,8 @@ class ControlPanelWindow(QMainWindow):
         notes_layout = QVBoxLayout(notes_box)
         notes_text = QLabel(
             "Use one public port per camera. A typical pattern is 45554, 45555, 45556, and so on.\n\n"
-            "Password Env should match the environment variable in camera.env.bat, for example IMOU_CAM_CAM3_PASSWORD."
+            "Password Env should match the environment variable in camera.env.bat, for example IMOU_CAM_CAM3_PASSWORD.\n\n"
+            "Keep subtype at 0 in inventory unless you intentionally want the lower-bandwidth substream as the default profile."
         )
         notes_text.setWordWrap(True)
         notes_layout.addWidget(notes_text)
@@ -594,9 +617,10 @@ class ControlPanelWindow(QMainWindow):
         flow_text = QLabel(
             "1. Save settings after any credential or DDNS change.\n"
             "2. Run health check before opening long-running views.\n"
-            "3. Use View Selected Cameras for focused work.\n"
-            "4. Use View All Enabled Cameras for the normal wall view.\n"
-            "5. Keep target mode on auto for day-to-day operation."
+            "3. Run Source Capability Check when FPS is lower than expected.\n"
+            "4. Use View Selected Cameras for focused work.\n"
+            "5. Use View All Enabled Cameras for the normal wall view.\n"
+            "6. Keep target mode on auto for day-to-day operation."
         )
         flow_text.setWordWrap(True)
         flow_layout.addWidget(flow_text)
@@ -607,13 +631,24 @@ class ControlPanelWindow(QMainWindow):
             "auto: best default, re-evaluates LAN, DDNS, and public targets.\n"
             "lan: use only local network addresses.\n"
             "ddns: use the dynamic DNS hostname for remote access.\n"
-            "public: use the public IP and forwarded port directly."
+            "public: use the public IP and forwarded port directly.\n\n"
+            "High-FPS split view opens one viewer process per camera. It is the best choice when you want the highest practical FPS per camera."
         )
         mode_text.setWordWrap(True)
         mode_layout.addWidget(mode_text)
 
+        source_box = QGroupBox("Source Capability")
+        source_layout = QVBoxLayout(source_box)
+        source_text = QLabel(
+            "Source Capability Check measures the stream that the camera really delivers over 10 seconds.\n\n"
+            "If source FPS is already low, the bottleneck is camera-side or profile-side, not the desktop viewer."
+        )
+        source_text.setWordWrap(True)
+        source_layout.addWidget(source_text)
+
         layout.addWidget(flow_box)
         layout.addWidget(mode_box)
+        layout.addWidget(source_box)
         layout.addStretch(1)
         return tab
 
@@ -700,8 +735,15 @@ class ControlPanelWindow(QMainWindow):
             for col_index, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setData(Qt.UserRole, row.camera_id)
+                source_fps, source_helper = self.source_capability_status.get(row.camera_id, (0.0, "Run source capability check to measure stream ceiling"))
+                tooltip_parts = []
                 if col_index == 4:
                     item.setData(Qt.ToolTipRole, status_helper)
+                    tooltip_parts.append(status_helper)
+                if source_helper:
+                    tooltip_parts.append(source_helper)
+                if tooltip_parts:
+                    item.setData(Qt.ToolTipRole, "\n".join(tooltip_parts))
                 if col_index == 4:
                     item.setTextAlignment(Qt.AlignCenter)
                     if value == "Healthy":
@@ -880,6 +922,43 @@ class ControlPanelWindow(QMainWindow):
             helper_parts.append(f"{unknown} unknown")
         helper = ", ".join(helper_parts) if helper_parts else "Latest health snapshot is green"
         self.metric_health.set_value(summary, helper)
+        self._refresh_source_snapshot()
+
+    def _refresh_source_snapshot(self) -> None:
+        capability_log = ROOT_DIR / "logs" / "source_capability_latest.log"
+        self.source_capability_status = {}
+        measured_by_camera: dict[str, list[tuple[str, float]]] = {}
+        if capability_log.exists():
+            for line in capability_log.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if "[RESULT]" not in line:
+                    continue
+                camera_match = re.search(r"camera=([A-Za-z0-9_-]+)", line)
+                subtype_match = re.search(r"subtype=([01])", line)
+                fps_match = re.search(r"measured_fps=([0-9.]+)", line)
+                if not camera_match or not subtype_match or not fps_match:
+                    continue
+                measured_by_camera.setdefault(camera_match.group(1), []).append((subtype_match.group(1), float(fps_match.group(1))))
+
+        cameras_over_20 = 0
+        measured_cameras = 0
+        for camera in self.vm.state.cameras:
+            results = measured_by_camera.get(camera.camera_id, [])
+            if not results:
+                continue
+            measured_cameras += 1
+            best_subtype, best_fps = max(results, key=lambda item: item[1])
+            helper = f"Best measured source ~{best_fps:.1f} fps on subtype={best_subtype}"
+            self.source_capability_status[camera.camera_id] = (best_fps, helper)
+            if best_fps > 20.0:
+                cameras_over_20 += 1
+
+        if measured_cameras == 0:
+            self.metric_source.set_value("Not measured", "Run source capability check to see the real stream ceiling")
+        else:
+            self.metric_source.set_value(
+                f"{cameras_over_20}/{measured_cameras} > 20 fps",
+                "Best measured source FPS from latest capability run",
+            )
 
     def _next_camera_seed(self) -> tuple[str, int]:
         existing_ids = {entry.camera_id for entry in self.vm.state.camera_editor_entries}
@@ -1113,6 +1192,52 @@ class ControlPanelWindow(QMainWindow):
         self.health_process.readyReadStandardError.connect(self._read_health_stderr)
         self.health_process.finished.connect(self._health_finished)
         self.health_process.start()
+
+    def run_source_capability_check(self) -> None:
+        if self.source_process is not None:
+            QMessageBox.information(self, WINDOW_TITLE, "Source capability check is already running.")
+            return
+        self.save_settings()
+        camera_ids = self.selected_camera_ids()
+        label = ", ".join(camera_ids) if camera_ids else "all enabled cameras"
+        self.append_output(f"[INFO] Running source capability check for {label}...")
+        self._set_status("Running source capability check...")
+
+        program, arguments, process_env_values = self.vm.source_capability_command(camera_ids or None)
+        self.source_process = QProcess(self)
+        self.source_process.setProgram(program)
+        self.source_process.setArguments(arguments)
+        self.source_process.setWorkingDirectory(str(ROOT_DIR))
+        process_env = self.source_process.processEnvironment()
+        for key, value in process_env_values.items():
+            process_env.insert(key, value)
+        self.source_process.setProcessEnvironment(process_env)
+        self.source_process.readyReadStandardOutput.connect(self._read_source_stdout)
+        self.source_process.readyReadStandardError.connect(self._read_source_stderr)
+        self.source_process.finished.connect(self._source_finished)
+        self.source_process.start()
+
+    def _read_source_stdout(self) -> None:
+        if self.source_process is None:
+            return
+        text = bytes(self.source_process.readAllStandardOutput()).decode(errors="ignore")
+        self.append_output(text)
+
+    def _read_source_stderr(self) -> None:
+        if self.source_process is None:
+            return
+        text = bytes(self.source_process.readAllStandardError()).decode(errors="ignore")
+        self.append_output(text)
+
+    def _source_finished(self, exit_code: int) -> None:
+        if exit_code == 0:
+            self._set_status("Source capability check passed")
+        else:
+            self._set_status(f"Source capability check failed (exit {exit_code})")
+        self._refresh_source_snapshot()
+        self._refresh_camera_table()
+        self.append_output(f"[INFO] Source capability check finished with exit code {exit_code}")
+        self.source_process = None
 
     def _read_health_stdout(self) -> None:
         if self.health_process is None:
