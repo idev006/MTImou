@@ -32,8 +32,9 @@ Current operator-facing entrypoints:
 21. [20-ui-mvvm-ssot-architecture.md](./20-ui-mvvm-ssot-architecture.md)
 22. [21-robustness-process-engineering.md](./21-robustness-process-engineering.md)
 23. [22-n-camera-architecture.md](./22-n-camera-architecture.md)
-24. [multi-camera-runbook.md](./multi-camera-runbook.md)
-25. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
+24. [23-developer-architecture-map.md](./23-developer-architecture-map.md)
+25. [multi-camera-runbook.md](./multi-camera-runbook.md)
+26. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
 
 ## Working Model
 

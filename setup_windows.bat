@@ -74,5 +74,6 @@ echo [INFO] Setup completed.
 echo [INFO] Next steps:
 echo        1. Edit camera.env.bat if needed
 echo        2. Review cameras.json
-echo        3. Run run_control_panel.bat
+echo        3. Run run_doctor.bat
+echo        4. Run run_control_panel.bat
 exit /b 0

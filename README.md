@@ -34,6 +34,7 @@ First-time setup on Windows:
 ```bat
 cd /d F:\programming\python\MTImou
 setup_windows.bat
+run_doctor.bat
 ```
 
 Then open the control panel:
@@ -264,6 +265,8 @@ Important note:
   - Default single-camera entrypoint, currently points to `cam1`
 - [`run_system_health_check.bat`](./run_system_health_check.bat)
   - Validate LAN, DDNS, and public paths with TCP and RTSP first-frame checks
+- [`run_doctor.bat`](./run_doctor.bat)
+  - Developer and installer readiness check for Python, dependencies, config files, and UI importability
 - [`run_resilience_smoke.bat`](./run_resilience_smoke.bat)
   - Repeat first-frame checks across selected modes/cycles to catch short-lived instability
 - [`run_control_panel.bat`](./run_control_panel.bat)
@@ -307,6 +310,7 @@ To add camera `N+1`:
 Operational and architecture documents live in [`docs`](./docs):
 
 - [`docs/README.md`](./docs/README.md)
+- [`DEVELOPER_GUIDE.md`](./DEVELOPER_GUIDE.md)
 - [`docs/multi-camera-runbook.md`](./docs/multi-camera-runbook.md)
 - [`docs/12-production-hardening-plan.md`](./docs/12-production-hardening-plan.md)
 - [`docs/13-incident-runbook.md`](./docs/13-incident-runbook.md)
@@ -318,6 +322,7 @@ Operational and architecture documents live in [`docs`](./docs):
 - [`docs/20-ui-mvvm-ssot-architecture.md`](./docs/20-ui-mvvm-ssot-architecture.md)
 - [`docs/21-robustness-process-engineering.md`](./docs/21-robustness-process-engineering.md)
 - [`docs/22-n-camera-architecture.md`](./docs/22-n-camera-architecture.md)
+- [`docs/23-developer-architecture-map.md`](./docs/23-developer-architecture-map.md)
 
 Scale-out templates:
 
