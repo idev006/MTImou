@@ -167,6 +167,11 @@ The control panel now lets the operator:
 
 - manage group and tier per camera
 - select cameras by group
+- filter cameras by group and tier
+- search large inventories
+- save and reuse selection presets
+- launch `critical` tier cameras directly
+- bulk-edit group/tier/wall/focus policy in camera management
 - define wall vs focus stream policy per camera
 
 ## Public / Worldwide Access

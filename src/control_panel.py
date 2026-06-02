@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, Qt
+from PySide6.QtCore import QItemSelectionModel, QProcess, Qt
 from PySide6.QtGui import QAction, QTextCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QInputDialog,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -243,6 +244,8 @@ class ControlPanelWindow(QMainWindow):
         self.tier_filter_combo = QComboBox()
         self.tier_filter_combo.addItems(["All Tiers", *TIER_OPTIONS])
         self.tier_filter_combo.currentTextChanged.connect(self._apply_camera_table_filters)
+        self.preset_combo = QComboBox()
+        self.preset_combo.addItem("No preset selected")
 
         self.password_fields: list[PasswordField] = []
         self.inventory_table = QTableWidget(0, len(INVENTORY_COLUMNS))
@@ -263,6 +266,14 @@ class ControlPanelWindow(QMainWindow):
         self.metric_source = MetricCard("Source FPS Ceiling", "blue")
         self.camera_health_status: dict[str, tuple[str, str]] = {}
         self.source_capability_status: dict[str, tuple[float, str]] = {}
+        self.bulk_group_edit = QLineEdit()
+        self.bulk_group_edit.setPlaceholderText("group")
+        self.bulk_tier_combo = QComboBox()
+        self.bulk_tier_combo.addItems(["No change", *TIER_OPTIONS])
+        self.bulk_wall_combo = QComboBox()
+        self.bulk_wall_combo.addItems(["No change", "1", "0"])
+        self.bulk_focus_combo = QComboBox()
+        self.bulk_focus_combo.addItems(["No change", "0", "1"])
 
         self._build_ui()
         self._apply_styles()
@@ -515,6 +526,12 @@ class ControlPanelWindow(QMainWindow):
         btn_all = QPushButton("View All Enabled Cameras")
         btn_all.clicked.connect(self.launch_all_cameras)
 
+        btn_critical = QPushButton("View Critical Cameras")
+        btn_critical.clicked.connect(self.launch_critical_cameras)
+
+        btn_critical_high_fps = QPushButton("View Critical Cameras (High FPS)")
+        btn_critical_high_fps.clicked.connect(self.launch_critical_cameras_high_fps)
+
         btn_health = QPushButton("Run Health Check")
         btn_health.clicked.connect(self.run_health_check)
 
@@ -527,10 +544,27 @@ class ControlPanelWindow(QMainWindow):
         btn_readme = QPushButton("Open Project README")
         btn_readme.clicked.connect(self.open_readme)
 
-        for btn in [btn_selected, btn_selected_high_fps, btn_all, btn_health, btn_source, btn_logs, btn_readme]:
+        for btn in [btn_selected, btn_selected_high_fps, btn_all, btn_critical, btn_critical_high_fps, btn_health, btn_source, btn_logs, btn_readme]:
             action_layout.addWidget(btn)
 
         action_layout.addWidget(self.open_log_checkbox)
+
+        preset_box = QGroupBox("Saved Presets")
+        preset_layout = QVBoxLayout(preset_box)
+        preset_layout.addWidget(self.preset_combo)
+        btn_save_preset = QPushButton("Save Current Selection")
+        btn_save_preset.clicked.connect(self.save_current_selection_as_preset)
+        btn_apply_preset = QPushButton("Apply Preset")
+        btn_apply_preset.clicked.connect(self.apply_selected_preset)
+        btn_run_preset = QPushButton("Run Preset")
+        btn_run_preset.clicked.connect(self.run_selected_preset)
+        btn_run_preset_high = QPushButton("Run Preset (High FPS)")
+        btn_run_preset_high.clicked.connect(self.run_selected_preset_high_fps)
+        btn_delete_preset = QPushButton("Delete Preset")
+        btn_delete_preset.clicked.connect(self.delete_selected_preset)
+        for btn in [btn_save_preset, btn_apply_preset, btn_run_preset, btn_run_preset_high, btn_delete_preset]:
+            preset_layout.addWidget(btn)
+        action_layout.addWidget(preset_box)
         action_layout.addStretch(1)
 
         output_box = QGroupBox("Recent Activity")
@@ -632,6 +666,22 @@ class ControlPanelWindow(QMainWindow):
         actions.addStretch(1)
         actions.addWidget(btn_save)
         box_layout.addLayout(actions)
+
+        bulk_box = QGroupBox("Bulk Edit Selected Rows")
+        bulk_layout = QHBoxLayout(bulk_box)
+        bulk_layout.addWidget(QLabel("Group"))
+        bulk_layout.addWidget(self.bulk_group_edit)
+        bulk_layout.addWidget(QLabel("Tier"))
+        bulk_layout.addWidget(self.bulk_tier_combo)
+        bulk_layout.addWidget(QLabel("Wall"))
+        bulk_layout.addWidget(self.bulk_wall_combo)
+        bulk_layout.addWidget(QLabel("Focus"))
+        bulk_layout.addWidget(self.bulk_focus_combo)
+        btn_apply_bulk = QPushButton("Apply Bulk Edit")
+        btn_apply_bulk.setObjectName("primary")
+        btn_apply_bulk.clicked.connect(self.apply_bulk_edit_to_inventory)
+        bulk_layout.addWidget(btn_apply_bulk)
+        box_layout.addWidget(bulk_box)
 
         notes_box = QGroupBox("Inventory Notes")
         notes_layout = QVBoxLayout(notes_box)
@@ -1046,6 +1096,17 @@ class ControlPanelWindow(QMainWindow):
             self.group_filter_combo.setCurrentText(current)
         self.group_filter_combo.blockSignals(False)
 
+    def _refresh_presets(self) -> None:
+        current = self.preset_combo.currentText()
+        self.preset_combo.blockSignals(True)
+        self.preset_combo.clear()
+        self.preset_combo.addItem("No preset selected")
+        for preset in self.vm.state.selection_presets:
+            self.preset_combo.addItem(preset.name)
+        if current and self.preset_combo.findText(current) >= 0:
+            self.preset_combo.setCurrentText(current)
+        self.preset_combo.blockSignals(False)
+
     def _apply_camera_table_filters(self) -> None:
         search_text = self.camera_search_edit.text().strip().lower()
         group_value = self.group_filter_combo.currentText().strip()
@@ -1122,7 +1183,8 @@ class ControlPanelWindow(QMainWindow):
         self.camera_table.clearSelection()
         for row in range(self.camera_table.rowCount()):
             if not self.camera_table.isRowHidden(row):
-                self.camera_table.selectRow(row)
+                index = self.camera_table.model().index(row, 0)
+                self.camera_table.selectionModel().select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
         self._refresh_selection_summary()
 
     def _select_enabled_cameras(self) -> None:
@@ -1132,7 +1194,8 @@ class ControlPanelWindow(QMainWindow):
                 continue
             status_item = self.camera_table.item(row, 4)
             if status_item is not None and status_item.text() != "Disabled":
-                self.camera_table.selectRow(row)
+                index = self.camera_table.model().index(row, 0)
+                self.camera_table.selectionModel().select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
         self._refresh_selection_summary()
 
     def _select_group_cameras(self) -> None:
@@ -1149,7 +1212,22 @@ class ControlPanelWindow(QMainWindow):
                 continue
             parts = label_item.text().split(" | ")
             if len(parts) >= 3 and parts[2] == selected_group:
-                self.camera_table.selectRow(row)
+                index = self.camera_table.model().index(row, 0)
+                self.camera_table.selectionModel().select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
+        self._refresh_selection_summary()
+
+    def _select_tier_cameras(self, tier: str) -> None:
+        self.camera_table.clearSelection()
+        for row in range(self.camera_table.rowCount()):
+            if self.camera_table.isRowHidden(row):
+                continue
+            label_item = self.camera_table.item(row, 0)
+            if label_item is None:
+                continue
+            parts = label_item.text().split(" | ")
+            if len(parts) >= 4 and parts[3] == tier:
+                index = self.camera_table.model().index(row, 0)
+                self.camera_table.selectionModel().select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
         self._refresh_selection_summary()
 
     def toggle_password_visibility(self, visible: bool) -> None:
@@ -1225,6 +1303,40 @@ class ControlPanelWindow(QMainWindow):
         self._refresh_inventory_table()
         self.append_output(f"[INFO] Removed {len(selected_rows)} draft camera row(s)")
 
+    def apply_bulk_edit_to_inventory(self) -> None:
+        selected_rows = sorted({item.row() for item in self.inventory_table.selectedItems()})
+        if not selected_rows:
+            QMessageBox.information(self, WINDOW_TITLE, "Select one or more inventory rows first.")
+            return
+        group_value = self.bulk_group_edit.text().strip()
+        tier_value = self.bulk_tier_combo.currentText().strip()
+        wall_value = self.bulk_wall_combo.currentText().strip()
+        focus_value = self.bulk_focus_combo.currentText().strip()
+        changed = 0
+        for row in selected_rows:
+            if group_value:
+                item = self.inventory_table.item(row, 3)
+                if item is not None:
+                    item.setText(group_value)
+                    changed += 1
+            if tier_value and tier_value != "No change":
+                item = self.inventory_table.item(row, 4)
+                if item is not None:
+                    item.setText(tier_value)
+                    changed += 1
+            if wall_value and wall_value != "No change":
+                item = self.inventory_table.item(row, 11)
+                if item is not None:
+                    item.setText(wall_value)
+                    changed += 1
+            if focus_value and focus_value != "No change":
+                item = self.inventory_table.item(row, 12)
+                if item is not None:
+                    item.setText(focus_value)
+                    changed += 1
+        self.append_output(f"[INFO] Applied bulk edit to {len(selected_rows)} row(s)")
+        self._set_status(f"Bulk edited {len(selected_rows)} inventory row(s)")
+
     def save_camera_inventory(self) -> None:
         entries = []
         try:
@@ -1239,6 +1351,7 @@ class ControlPanelWindow(QMainWindow):
         self._rebuild_password_fields()
         self._refresh_health_snapshot()
         self._refresh_group_filter()
+        self._refresh_presets()
         self._refresh_camera_table()
         self._refresh_inventory_table()
         self._update_metric_cards()
@@ -1312,6 +1425,28 @@ class ControlPanelWindow(QMainWindow):
             self.append_output(message)
             self._set_status(status)
 
+    def launch_critical_cameras(self) -> None:
+        self.save_settings()
+        ids, result = self.vm.launch_tier("critical", high_fps=False)
+        if not ids:
+            QMessageBox.warning(self, WINDOW_TITLE, "No enabled critical cameras found.")
+            return
+        if result is not None:
+            message, status = result
+            self.append_output(message)
+            self._set_status(status)
+
+    def launch_critical_cameras_high_fps(self) -> None:
+        self.save_settings()
+        ids, result = self.vm.launch_tier("critical", high_fps=True)
+        if not ids:
+            QMessageBox.warning(self, WINDOW_TITLE, "No enabled critical cameras found.")
+            return
+        if result is not None:
+            message, status = result
+            self.append_output(message)
+            self._set_status(status)
+
     def run_health_check(self) -> None:
         if self.health_process is not None:
             QMessageBox.information(self, WINDOW_TITLE, "Health check is already running.")
@@ -1379,6 +1514,73 @@ class ControlPanelWindow(QMainWindow):
         self._refresh_camera_table()
         self.append_output(f"[INFO] Source capability check finished with exit code {exit_code}")
         self.source_process = None
+
+    def save_current_selection_as_preset(self) -> None:
+        camera_ids = self.selected_camera_ids()
+        if not camera_ids:
+            QMessageBox.warning(self, WINDOW_TITLE, "Select one or more cameras before saving a preset.")
+            return
+        name, ok = QInputDialog.getText(self, WINDOW_TITLE, "Preset name")
+        if not ok:
+            return
+        try:
+            self.vm.save_preset(name, camera_ids)
+        except ValueError as exc:
+            QMessageBox.warning(self, WINDOW_TITLE, str(exc))
+            return
+        self._refresh_presets()
+        self.append_output(f"[INFO] Saved preset '{name.strip()}'")
+        self._set_status(f"Saved preset {name.strip()}")
+
+    def apply_selected_preset(self) -> None:
+        preset_name = self.preset_combo.currentText().strip()
+        if not preset_name or preset_name == "No preset selected":
+            QMessageBox.information(self, WINDOW_TITLE, "Choose a preset first.")
+            return
+        preset = next((item for item in self.vm.state.selection_presets if item.name == preset_name), None)
+        if preset is None:
+            QMessageBox.warning(self, WINDOW_TITLE, "Preset not found.")
+            return
+        self.camera_table.clearSelection()
+        wanted = set(preset.camera_ids)
+        for row in range(self.camera_table.rowCount()):
+            if self.camera_table.isRowHidden(row):
+                continue
+            item = self.camera_table.item(row, 0)
+            if item is not None and str(item.data(Qt.UserRole)) in wanted:
+                self.camera_table.selectRow(row)
+        self._refresh_selection_summary()
+        self.append_output(f"[INFO] Applied preset '{preset_name}'")
+
+    def run_selected_preset(self) -> None:
+        self.apply_selected_preset()
+        camera_ids = self.selected_camera_ids()
+        if not camera_ids:
+            return
+        self.save_settings()
+        message, status = self.vm.launch_selected(camera_ids)
+        self.append_output(message)
+        self._set_status(status)
+
+    def run_selected_preset_high_fps(self) -> None:
+        self.apply_selected_preset()
+        camera_ids = self.selected_camera_ids()
+        if not camera_ids:
+            return
+        self.save_settings()
+        message, status = self.vm.launch_selected_high_fps(camera_ids)
+        self.append_output(message)
+        self._set_status(status)
+
+    def delete_selected_preset(self) -> None:
+        preset_name = self.preset_combo.currentText().strip()
+        if not preset_name or preset_name == "No preset selected":
+            QMessageBox.information(self, WINDOW_TITLE, "Choose a preset first.")
+            return
+        self.vm.delete_preset(preset_name)
+        self._refresh_presets()
+        self.append_output(f"[INFO] Deleted preset '{preset_name}'")
+        self._set_status(f"Deleted preset {preset_name}")
 
     def _read_health_stdout(self) -> None:
         if self.health_process is None:

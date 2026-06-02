@@ -146,6 +146,9 @@ The control panel should help operators manage large inventories by:
 - search
 - group filter
 - tier filter
+- selection presets
+- direct launch by tier
+- bulk edit for policy fields
 - grouped selection
 - camera inventory editing
 - source-ceiling visibility

@@ -103,6 +103,16 @@ Suggested usage:
   - selected cameras only
   - use split-view mode with mainstream
 
+Operator shortcuts now available in the control panel:
+
+- search by camera/group/tier/host
+- filter by group
+- filter by tier
+- launch `critical` tier cameras directly
+- save current selection as a preset
+- run a preset in normal or high-FPS mode
+- bulk-edit `group`, `tier`, `wall`, and `focus` policy in inventory
+
 Suggested groups:
 
 - `front`

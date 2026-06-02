@@ -22,6 +22,12 @@ class PasswordEntry:
 
 
 @dataclass(slots=True)
+class SelectionPreset:
+    name: str
+    camera_ids: list[str]
+
+
+@dataclass(slots=True)
 class CameraEditorEntry:
     camera_id: str
     name: str
@@ -51,4 +57,5 @@ class OperatorSettingsState:
     password_entries: list[PasswordEntry] = field(default_factory=list)
     cameras: list[CameraListItem] = field(default_factory=list)
     camera_editor_entries: list[CameraEditorEntry] = field(default_factory=list)
+    selection_presets: list[SelectionPreset] = field(default_factory=list)
     output_lines: list[str] = field(default_factory=list)
