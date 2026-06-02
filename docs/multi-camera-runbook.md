@@ -117,6 +117,9 @@ Operator shortcuts now available in the control panel:
 - bulk enable/disable inventory rows
 - bulk-edit `group`, `tier`, `wall`, and `focus` policy in inventory
 - monitor enabled counts for `critical`, `standard`, and `archive` from dashboard cards
+- resize the app and rely on x/y scrolling instead of crushed layouts
+- collapse settings or inventory sections that are not needed right now
+- reopen the control panel with the last active tab and section state restored
 
 Suggested operator workflow for larger deployments:
 

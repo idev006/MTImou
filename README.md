@@ -179,6 +179,9 @@ The control panel now lets the operator:
 - run presets directly from the dashboard
 - define wall vs focus stream policy per camera
 - see enabled camera counts by tier on the dashboard
+- resize the app window safely with x/y scrolling when content is tighter than the viewport
+- work with collapsible settings and inventory sections
+- reopen the UI with the last window size, tab, and section state restored
 
 ## Public / Worldwide Access
 

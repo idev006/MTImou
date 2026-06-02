@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, QProcess, Qt
+from PySide6.QtCore import QItemSelectionModel, QProcess, QSettings, Qt
 from PySide6.QtGui import QAction, QTextCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QTableWidgetSelectionRange,
     QPushButton,
     QScrollArea,
+    QSplitter,
     QSizePolicy,
     QStatusBar,
     QSpinBox,
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -112,6 +114,41 @@ class MetricCard(QFrame):
     def set_value(self, value: str, helper: str = "") -> None:
         self.value_label.setText(value)
         self.helper_label.setText(helper)
+
+
+class CollapsibleSection(QFrame):
+    def __init__(self, title: str, body: QWidget, *, collapsed: bool = False) -> None:
+        super().__init__()
+        self.setObjectName("collapsibleSection")
+
+        self.toggle_button = QToolButton()
+        self.toggle_button.setText(title)
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setChecked(not collapsed)
+        self.toggle_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.toggle_button.setArrowType(Qt.DownArrow if not collapsed else Qt.RightArrow)
+        self.toggle_button.clicked.connect(self._apply_state)
+
+        self.body = body
+        self.body.setVisible(not collapsed)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(self.toggle_button)
+        layout.addWidget(self.body)
+
+    def _apply_state(self) -> None:
+        expanded = self.toggle_button.isChecked()
+        self.toggle_button.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        self.body.setVisible(expanded)
+
+    def is_collapsed(self) -> bool:
+        return not self.toggle_button.isChecked()
+
+    def set_collapsed(self, collapsed: bool) -> None:
+        self.toggle_button.setChecked(not collapsed)
+        self._apply_state()
 
 
 class CameraWizardDialog(QDialog):
@@ -232,11 +269,14 @@ class PresetDialog(QDialog):
 
 
 class ControlPanelWindow(QMainWindow):
+    DASHBOARD_BREAKPOINT = 1220
+
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.resize(1360, 860)
         self.setMinimumSize(860, 620)
+        self.ui_settings = QSettings("MTImou", "ControlPanel")
 
         self.vm = ControlPanelViewModel(root_dir=ROOT_DIR, env_path=ENV_PATH)
         self.health_process: QProcess | None = None
@@ -311,11 +351,14 @@ class ControlPanelWindow(QMainWindow):
         self.bulk_wall_combo.addItems(["No change", "1", "0"])
         self.bulk_focus_combo = QComboBox()
         self.bulk_focus_combo.addItems(["No change", "0", "1"])
+        self.collapsible_sections: dict[str, CollapsibleSection] = {}
 
         self._build_ui()
         self._apply_styles()
         self.reload_settings()
         self._refresh_group_filter()
+        self._restore_ui_state()
+        self._update_dashboard_breakpoint()
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(
@@ -346,6 +389,12 @@ class ControlPanelWindow(QMainWindow):
                 border: 1px solid #d9e2ef;
                 background: #ffffff;
             }
+            QFrame#collapsibleSection {
+                border: 1px solid #d9e2ef;
+                border-radius: 12px;
+                background: #ffffff;
+                padding: 4px 8px 8px 8px;
+            }
             QFrame[accent="green"] {
                 border-left: 5px solid #1f9d64;
             }
@@ -375,6 +424,14 @@ class ControlPanelWindow(QMainWindow):
                 border: 1px solid #d9e2ef;
                 border-radius: 10px;
                 padding: 10px 12px;
+            }
+            QToolButton {
+                border: 0;
+                font-weight: 700;
+                color: #172233;
+                background: transparent;
+                text-align: left;
+                padding: 6px 2px;
             }
             QTabWidget::pane {
                 border: 1px solid #d9e2ef;
@@ -447,7 +504,9 @@ class ControlPanelWindow(QMainWindow):
         root_layout.addWidget(title)
         root_layout.addWidget(subtitle)
 
-        metric_layout = QHBoxLayout()
+        metric_widget = QWidget()
+        metric_layout = QHBoxLayout(metric_widget)
+        metric_layout.setContentsMargins(0, 0, 0, 0)
         metric_layout.setSpacing(12)
         metric_layout.addWidget(self.metric_enabled)
         metric_layout.addWidget(self.metric_mode)
@@ -457,14 +516,22 @@ class ControlPanelWindow(QMainWindow):
         metric_layout.addWidget(self.metric_critical)
         metric_layout.addWidget(self.metric_standard)
         metric_layout.addWidget(self.metric_archive)
-        root_layout.addLayout(metric_layout)
+        metric_widget.adjustSize()
+        metric_widget.setMinimumWidth(metric_widget.sizeHint().width())
+        metric_scroll = QScrollArea()
+        metric_scroll.setWidgetResizable(True)
+        metric_scroll.setFrameShape(QFrame.NoFrame)
+        metric_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        metric_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        metric_scroll.setWidget(metric_widget)
+        root_layout.addWidget(metric_scroll)
 
-        tabs = QTabWidget()
-        tabs.addTab(self._wrap_scroll(self._build_dashboard_tab()), "Dashboard")
-        tabs.addTab(self._wrap_scroll(self._build_settings_tab()), "Settings")
-        tabs.addTab(self._wrap_scroll(self._build_camera_management_tab()), "Camera Management")
-        tabs.addTab(self._wrap_scroll(self._build_help_tab()), "Operator Guide")
-        root_layout.addWidget(tabs, 1)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._wrap_scroll(self._build_dashboard_tab()), "Dashboard")
+        self.tabs.addTab(self._wrap_scroll(self._build_settings_tab()), "Settings")
+        self.tabs.addTab(self._wrap_scroll(self._build_camera_management_tab()), "Camera Management")
+        self.tabs.addTab(self._wrap_scroll(self._build_help_tab()), "Operator Guide")
+        root_layout.addWidget(self.tabs, 1)
 
         self.setCentralWidget(central)
 
@@ -503,9 +570,6 @@ class ControlPanelWindow(QMainWindow):
         layout = content.layout()
         if layout is not None:
             layout.setSizeConstraint(QLayout.SetMinimumSize)
-        content.adjustSize()
-        hint = content.sizeHint()
-        content.setMinimumSize(hint.width(), hint.height())
         content.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
         scroll = QScrollArea()
@@ -518,11 +582,10 @@ class ControlPanelWindow(QMainWindow):
 
     def _build_dashboard_tab(self) -> QWidget:
         tab = QWidget()
-        tab.setMinimumSize(1380, 920)
-        layout = QGridLayout(tab)
+        tab.setMinimumSize(980, 920)
+        layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
-        layout.setHorizontalSpacing(14)
-        layout.setVerticalSpacing(14)
+        layout.setSpacing(14)
 
         camera_box = QGroupBox("Camera Grid")
         camera_layout = QVBoxLayout(camera_box)
@@ -542,6 +605,10 @@ class ControlPanelWindow(QMainWindow):
         self.camera_table.setColumnWidth(4, 90)
         camera_layout.addWidget(self.camera_table, 1)
 
+        search_row = QHBoxLayout()
+        search_row.addWidget(self.camera_search_edit, 1)
+        camera_layout.addLayout(search_row)
+
         row_buttons = QHBoxLayout()
         btn_select_all = QPushButton("Select All")
         btn_select_all.clicked.connect(self._select_all_cameras)
@@ -551,7 +618,6 @@ class ControlPanelWindow(QMainWindow):
         btn_enabled.clicked.connect(self._select_enabled_cameras)
         btn_group = QPushButton("Select Group")
         btn_group.clicked.connect(self._select_group_cameras)
-        row_buttons.addWidget(self.camera_search_edit, 1)
         row_buttons.addWidget(btn_select_all)
         row_buttons.addWidget(btn_enabled)
         row_buttons.addWidget(self.group_filter_combo)
@@ -627,14 +693,22 @@ class ControlPanelWindow(QMainWindow):
         self.output.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         output_layout.addWidget(self.output)
 
-        layout.addWidget(camera_box, 0, 0, 2, 1)
-        layout.addWidget(action_box, 0, 1)
-        layout.addWidget(output_box, 1, 1)
-        layout.setColumnMinimumWidth(0, 900)
-        layout.setColumnMinimumWidth(1, 420)
-        layout.setColumnStretch(0, 3)
-        layout.setColumnStretch(1, 2)
-        layout.setRowStretch(1, 1)
+        self.dashboard_tab = tab
+        self.dashboard_side_splitter = QSplitter(Qt.Vertical)
+        self.dashboard_side_splitter.addWidget(action_box)
+        self.dashboard_side_splitter.addWidget(output_box)
+        self.dashboard_side_splitter.setStretchFactor(0, 0)
+        self.dashboard_side_splitter.setStretchFactor(1, 1)
+        self.dashboard_side_splitter.setSizes([420, 320])
+
+        self.dashboard_splitter = QSplitter(Qt.Horizontal)
+        self.dashboard_splitter.addWidget(camera_box)
+        self.dashboard_splitter.addWidget(self.dashboard_side_splitter)
+        self.dashboard_splitter.setStretchFactor(0, 3)
+        self.dashboard_splitter.setStretchFactor(1, 2)
+        self.dashboard_splitter.setSizes([900, 460])
+
+        layout.addWidget(self.dashboard_splitter, 1)
         return tab
 
     def _build_settings_tab(self) -> QWidget:
@@ -644,8 +718,8 @@ class ControlPanelWindow(QMainWindow):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
 
-        settings_box = QGroupBox("Operator Settings")
-        settings_layout = QFormLayout(settings_box)
+        settings_body = QWidget()
+        settings_layout = QFormLayout(settings_body)
         settings_layout.setContentsMargins(16, 18, 16, 16)
         settings_layout.setSpacing(12)
         settings_layout.addRow("Target mode", self.mode_combo)
@@ -653,10 +727,12 @@ class ControlPanelWindow(QMainWindow):
         settings_layout.addRow("Camera username", self.user_edit)
         settings_layout.addRow("Camera passwords", self.password_rows_host)
         settings_layout.addRow("", self.show_passwords_checkbox)
-        layout.addWidget(settings_box)
+        self.settings_section = CollapsibleSection("Operator Settings", settings_body)
+        self.collapsible_sections["settings/operator"] = self.settings_section
+        layout.addWidget(self.settings_section)
 
-        notes_box = QGroupBox("How To Use Settings")
-        notes_layout = QVBoxLayout(notes_box)
+        notes_body = QWidget()
+        notes_layout = QVBoxLayout(notes_body)
         notes = QLabel(
             "Auto mode is the normal choice. It prefers LAN when you are at home, then DDNS, then public IP.\n\n"
             "Use DDNS mode when you want to verify remote access specifically.\n\n"
@@ -666,19 +742,21 @@ class ControlPanelWindow(QMainWindow):
         notes.setWordWrap(True)
         notes.setStyleSheet("color: #4b5563;")
         notes_layout.addWidget(notes)
-        layout.addWidget(notes_box)
+        self.settings_notes_section = CollapsibleSection("How To Use Settings", notes_body, collapsed=True)
+        self.collapsible_sections["settings/notes"] = self.settings_notes_section
+        layout.addWidget(self.settings_notes_section)
         layout.addStretch(1)
         return tab
 
     def _build_camera_management_tab(self) -> QWidget:
         tab = QWidget()
-        tab.setMinimumSize(1540, 860)
+        tab.setMinimumSize(1180, 860)
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
 
-        box = QGroupBox("Camera Inventory")
-        box_layout = QVBoxLayout(box)
+        inventory_body = QWidget()
+        box_layout = QVBoxLayout(inventory_body)
 
         helper = QLabel(
             "Manage N cameras here. Edit network endpoints, assign each camera to a group, choose a tier, and define separate wall-view and focus-view stream policies."
@@ -746,10 +824,11 @@ class ControlPanelWindow(QMainWindow):
         bulk_layout.addWidget(btn_enable_selected)
         bulk_layout.addWidget(btn_disable_selected)
         bulk_layout.addWidget(btn_apply_bulk)
-        box_layout.addWidget(bulk_box)
+        self.bulk_section = CollapsibleSection("Bulk Edit Selected Rows", bulk_box, collapsed=True)
+        self.collapsible_sections["inventory/bulk"] = self.bulk_section
 
-        notes_box = QGroupBox("Inventory Notes")
-        notes_layout = QVBoxLayout(notes_box)
+        notes_body = QWidget()
+        notes_layout = QVBoxLayout(notes_body)
         notes_text = QLabel(
             "Use one public port per camera. A typical pattern is 45554, 45555, 45556, and so on.\n\n"
             "Password Env should match the environment variable in camera.env.bat, for example IMOU_CAM_CAM3_PASSWORD.\n\n"
@@ -758,8 +837,14 @@ class ControlPanelWindow(QMainWindow):
         notes_text.setWordWrap(True)
         notes_layout.addWidget(notes_text)
 
-        layout.addWidget(box, 1)
-        layout.addWidget(notes_box)
+        self.inventory_section = CollapsibleSection("Camera Inventory", inventory_body)
+        self.collapsible_sections["inventory/main"] = self.inventory_section
+        self.inventory_notes_section = CollapsibleSection("Inventory Notes", notes_body, collapsed=True)
+        self.collapsible_sections["inventory/notes"] = self.inventory_notes_section
+
+        layout.addWidget(self.inventory_section, 1)
+        layout.addWidget(self.bulk_section)
+        layout.addWidget(self.inventory_notes_section)
         return tab
 
     def _build_help_tab(self) -> QWidget:
@@ -808,6 +893,79 @@ class ControlPanelWindow(QMainWindow):
         layout.addWidget(source_box)
         layout.addStretch(1)
         return tab
+
+    def _update_dashboard_breakpoint(self) -> None:
+        if not hasattr(self, "dashboard_splitter"):
+            return
+        target_orientation = Qt.Vertical if self.width() < self.DASHBOARD_BREAKPOINT else Qt.Horizontal
+        if self.dashboard_splitter.orientation() == target_orientation:
+            return
+        self.dashboard_splitter.setOrientation(target_orientation)
+        if target_orientation == Qt.Vertical:
+            self.dashboard_splitter.setSizes([620, 340])
+        else:
+            self.dashboard_splitter.setSizes([900, 460])
+
+    def _restore_ui_state(self) -> None:
+        geometry = self.ui_settings.value("window/geometry")
+        if geometry:
+            self.restoreGeometry(geometry)
+        saved_width = int(self.ui_settings.value("window/width", self.width()))
+        saved_height = int(self.ui_settings.value("window/height", self.height()))
+        self.resize(
+            max(self.minimumWidth(), saved_width),
+            max(self.minimumHeight(), saved_height),
+        )
+
+        tab_index = int(self.ui_settings.value("tabs/current_index", 0))
+        if hasattr(self, "tabs"):
+            self.tabs.setCurrentIndex(max(0, min(tab_index, self.tabs.count() - 1)))
+
+        for key, section in self.collapsible_sections.items():
+            collapsed = str(self.ui_settings.value(f"section/{key}/collapsed", "false")).lower() == "true"
+            section.set_collapsed(collapsed)
+
+        if hasattr(self, "dashboard_splitter"):
+            main_sizes_raw = str(self.ui_settings.value("dashboard/main_splitter_sizes", "") or "").strip()
+            if main_sizes_raw:
+                sizes = [int(part) for part in main_sizes_raw.split(",") if part.strip().isdigit()]
+                if sizes:
+                    self.dashboard_splitter.setSizes(sizes)
+
+        if hasattr(self, "dashboard_side_splitter"):
+            side_sizes_raw = str(self.ui_settings.value("dashboard/side_splitter_sizes", "") or "").strip()
+            if side_sizes_raw:
+                sizes = [int(part) for part in side_sizes_raw.split(",") if part.strip().isdigit()]
+                if sizes:
+                    self.dashboard_side_splitter.setSizes(sizes)
+
+    def _save_ui_state(self) -> None:
+        self.ui_settings.setValue("window/geometry", self.saveGeometry())
+        self.ui_settings.setValue("window/width", self.width())
+        self.ui_settings.setValue("window/height", self.height())
+        if hasattr(self, "tabs"):
+            self.ui_settings.setValue("tabs/current_index", self.tabs.currentIndex())
+        for key, section in self.collapsible_sections.items():
+            self.ui_settings.setValue(f"section/{key}/collapsed", section.is_collapsed())
+        if hasattr(self, "dashboard_splitter"):
+            self.ui_settings.setValue(
+                "dashboard/main_splitter_sizes",
+                ",".join(str(size) for size in self.dashboard_splitter.sizes()),
+            )
+        if hasattr(self, "dashboard_side_splitter"):
+            self.ui_settings.setValue(
+                "dashboard/side_splitter_sizes",
+                ",".join(str(size) for size in self.dashboard_side_splitter.sizes()),
+            )
+        self.ui_settings.sync()
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._update_dashboard_breakpoint()
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        self._save_ui_state()
+        super().closeEvent(event)
 
     def append_output(self, text: str) -> None:
         if not text:
