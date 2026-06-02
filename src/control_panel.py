@@ -234,8 +234,15 @@ class ControlPanelWindow(QMainWindow):
         self.selection_summary = QLabel("No camera selected")
         self.selection_summary.setWordWrap(True)
         self.selection_summary.setObjectName("selectionSummary")
+        self.camera_search_edit = QLineEdit()
+        self.camera_search_edit.setPlaceholderText("Search camera, group, tier, host, or port")
+        self.camera_search_edit.textChanged.connect(self._apply_camera_table_filters)
         self.group_filter_combo = QComboBox()
         self.group_filter_combo.addItem("All Groups")
+        self.group_filter_combo.currentTextChanged.connect(self._apply_camera_table_filters)
+        self.tier_filter_combo = QComboBox()
+        self.tier_filter_combo.addItems(["All Tiers", *TIER_OPTIONS])
+        self.tier_filter_combo.currentTextChanged.connect(self._apply_camera_table_filters)
 
         self.password_fields: list[PasswordField] = []
         self.inventory_table = QTableWidget(0, len(INVENTORY_COLUMNS))
@@ -484,12 +491,13 @@ class ControlPanelWindow(QMainWindow):
         btn_enabled.clicked.connect(self._select_enabled_cameras)
         btn_group = QPushButton("Select Group")
         btn_group.clicked.connect(self._select_group_cameras)
+        row_buttons.addWidget(self.camera_search_edit, 1)
         row_buttons.addWidget(btn_select_all)
         row_buttons.addWidget(btn_enabled)
         row_buttons.addWidget(self.group_filter_combo)
+        row_buttons.addWidget(self.tier_filter_combo)
         row_buttons.addWidget(btn_group)
         row_buttons.addWidget(btn_clear)
-        row_buttons.addStretch(1)
         camera_layout.addLayout(row_buttons)
         camera_layout.addWidget(self.selection_summary)
 
@@ -630,7 +638,7 @@ class ControlPanelWindow(QMainWindow):
         notes_text = QLabel(
             "Use one public port per camera. A typical pattern is 45554, 45555, 45556, and so on.\n\n"
             "Password Env should match the environment variable in camera.env.bat, for example IMOU_CAM_CAM3_PASSWORD.\n\n"
-            "Recommended 10-camera strategy: keep Wall subtype at 1 for broad wall views, keep Focus subtype at 0 for detailed single-camera viewing, and organize cameras into groups such as front, side, rear, and indoor."
+            "Recommended large-N strategy: keep Wall subtype at 1 for broad wall views, keep Focus subtype at 0 for detailed single-camera viewing, and organize cameras into groups such as front, side, rear, parking, gate, and indoor."
         )
         notes_text.setWordWrap(True)
         notes_layout.addWidget(notes_text)
@@ -796,6 +804,7 @@ class ControlPanelWindow(QMainWindow):
                 self.camera_table.selectRow(row_index)
 
         self.camera_table.resizeRowsToContents()
+        self._apply_camera_table_filters()
         self._refresh_selection_summary()
 
     def _refresh_inventory_table(self) -> None:
@@ -1037,6 +1046,33 @@ class ControlPanelWindow(QMainWindow):
             self.group_filter_combo.setCurrentText(current)
         self.group_filter_combo.blockSignals(False)
 
+    def _apply_camera_table_filters(self) -> None:
+        search_text = self.camera_search_edit.text().strip().lower()
+        group_value = self.group_filter_combo.currentText().strip()
+        tier_value = self.tier_filter_combo.currentText().strip()
+        for row in range(self.camera_table.rowCount()):
+            label_item = self.camera_table.item(row, 0)
+            lan_item = self.camera_table.item(row, 1)
+            ddns_item = self.camera_table.item(row, 2)
+            public_item = self.camera_table.item(row, 3)
+            status_item = self.camera_table.item(row, 4)
+            haystack = " ".join(
+                item.text().lower()
+                for item in [label_item, lan_item, ddns_item, public_item, status_item]
+                if item is not None and item.text()
+            )
+            parts = label_item.text().split(" | ") if label_item is not None else []
+            group_name = parts[2] if len(parts) >= 3 else ""
+            tier = parts[3] if len(parts) >= 4 else ""
+            visible = True
+            if search_text and search_text not in haystack:
+                visible = False
+            if visible and group_value and group_value != "All Groups" and group_name != group_value:
+                visible = False
+            if visible and tier_value and tier_value != "All Tiers" and tier != tier_value:
+                visible = False
+            self.camera_table.setRowHidden(row, not visible)
+
     def _refresh_selection_summary(self) -> None:
         rows = self.selected_camera_rows()
         if not rows:
@@ -1061,6 +1097,8 @@ class ControlPanelWindow(QMainWindow):
         seen_rows: set[int] = set()
         for item in self.camera_table.selectedItems():
             row = item.row()
+            if self.camera_table.isRowHidden(row):
+                continue
             if row in seen_rows:
                 continue
             seen_rows.add(row)
@@ -1081,12 +1119,17 @@ class ControlPanelWindow(QMainWindow):
         return [row["camera_id"] for row in self.selected_camera_rows()]
 
     def _select_all_cameras(self) -> None:
-        self.camera_table.selectAll()
+        self.camera_table.clearSelection()
+        for row in range(self.camera_table.rowCount()):
+            if not self.camera_table.isRowHidden(row):
+                self.camera_table.selectRow(row)
         self._refresh_selection_summary()
 
     def _select_enabled_cameras(self) -> None:
         self.camera_table.clearSelection()
         for row in range(self.camera_table.rowCount()):
+            if self.camera_table.isRowHidden(row):
+                continue
             status_item = self.camera_table.item(row, 4)
             if status_item is not None and status_item.text() != "Disabled":
                 self.camera_table.selectRow(row)
@@ -1099,6 +1142,8 @@ class ControlPanelWindow(QMainWindow):
             return
         self.camera_table.clearSelection()
         for row in range(self.camera_table.rowCount()):
+            if self.camera_table.isRowHidden(row):
+                continue
             label_item = self.camera_table.item(row, 0)
             if label_item is None:
                 continue

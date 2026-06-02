@@ -76,6 +76,7 @@ Grid behavior:
 - `3-4 cameras` -> `2x2`
 - `5-9 cameras` -> `3x3`
 - `10-16 cameras` -> square-ish grid, but grouped wall views are recommended over one giant always-on board
+- `17-100 cameras` -> grouped wall views and focused split views are the supported operating model
 
 Backward-compatible default:
 
@@ -146,14 +147,14 @@ Notes:
 
 ## N-Camera Strategy
 
-The production model now supports `N cameras` with data-driven fields per camera:
+The production model now supports `N cameras` with data-driven fields per camera, for any integer `1 <= N <= 100`:
 
 - `group_name`
 - `tier`
 - `remote_wall_subtype`
 - `remote_focus_subtype`
 
-Recommended operating pattern for 10 cameras:
+Recommended operating pattern for large `N`:
 
 - wall view:
   - group-based or all-enabled
@@ -250,7 +251,7 @@ Operational and architecture documents live in [`docs`](./docs):
 - [`docs/19-actors-usecases-sequences.md`](./docs/19-actors-usecases-sequences.md)
 - [`docs/20-ui-mvvm-ssot-architecture.md`](./docs/20-ui-mvvm-ssot-architecture.md)
 - [`docs/21-robustness-process-engineering.md`](./docs/21-robustness-process-engineering.md)
-- [`docs/22-ten-camera-architecture.md`](./docs/22-ten-camera-architecture.md)
+- [`docs/22-n-camera-architecture.md`](./docs/22-n-camera-architecture.md)
 
 Scale-out templates:
 

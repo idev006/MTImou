@@ -72,6 +72,7 @@ Grid behavior:
 - `3-4 cameras` -> `2x2`
 - `5-9 cameras` -> `3x3`
 - `10-16 cameras` -> grouped wall-view is recommended over one giant always-on board
+- `17-100 cameras` -> grouped operation is the supported model
 
 Optional manual override:
 
