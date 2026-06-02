@@ -14,7 +14,7 @@ from mtimou_v2.viewer_common import blank_canvas, build_stream_state, overlay_st
 def run_single_camera(camera: CameraConfig, *, log_path, window_name: str) -> int:
     settings = viewer_runtime_settings(log_path=log_path, window_name=window_name)
     log = make_logger(settings.log_path)
-    style = overlay_style()
+    style = overlay_style(single_view=True)
 
     state = build_stream_state(camera, settings, camera_count=1)
     log(f"[INFO] Camera={camera.camera_id} name={camera.name}")
@@ -57,15 +57,17 @@ def run_single_camera(camera: CameraConfig, *, log_path, window_name: str) -> in
                 state.last_ok = now
                 elapsed = max(now - state.started, 1e-6)
                 fps = state.frame_count / elapsed
-                cv2.putText(frame, f"frames={state.frame_count} fps~{fps:.1f}", (16, 28), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (80, 255, 120), style["meta_thickness"], cv2.LINE_AA)
-                cv2.putText(frame, f"reconnects={state.reconnects} failovers={state.failovers}", (16, 52), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (255, 220, 80), style["small_thickness"], cv2.LINE_AA)
+                cv2.putText(frame, f"{state.camera.name} [{state.mode}]", (16, 30), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (80, 255, 120), style["title_thickness"], cv2.LINE_AA)
+                cv2.putText(frame, f"frames={state.frame_count} fps~{fps:.1f}", (16, 62), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (255, 220, 80), style["meta_thickness"], cv2.LINE_AA)
+                cv2.putText(frame, f"reconnects={state.reconnects} failovers={state.failovers}", (16, 92), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (220, 220, 220), style["small_thickness"], cv2.LINE_AA)
                 cv2.imshow(settings.window_name, frame)
             else:
                 idle = now - state.last_ok
                 canvas = blank_canvas()
-                cv2.putText(canvas, f"No frame for {idle:.1f}s", (16, 38), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (0, 0, 255), style["meta_thickness"], cv2.LINE_AA)
-                cv2.putText(canvas, f"reconnects={state.reconnects} failovers={state.failovers}", (16, 62), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (255, 220, 80), style["small_thickness"], cv2.LINE_AA)
-                cv2.putText(canvas, "Waiting for stream recovery...", (16, 86), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (220, 220, 220), style["small_thickness"], cv2.LINE_AA)
+                cv2.putText(canvas, f"{state.camera.name} [{state.mode}]", (16, 30), cv2.FONT_HERSHEY_SIMPLEX, style["title_scale"], (80, 255, 120), style["title_thickness"], cv2.LINE_AA)
+                cv2.putText(canvas, f"No frame for {idle:.1f}s", (16, 62), cv2.FONT_HERSHEY_SIMPLEX, style["meta_scale"], (0, 0, 255), style["meta_thickness"], cv2.LINE_AA)
+                cv2.putText(canvas, f"reconnects={state.reconnects} failovers={state.failovers}", (16, 92), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (255, 220, 80), style["small_thickness"], cv2.LINE_AA)
+                cv2.putText(canvas, "Waiting for stream recovery...", (16, 122), cv2.FONT_HERSHEY_SIMPLEX, style["small_scale"], (220, 220, 220), style["small_thickness"], cv2.LINE_AA)
                 cv2.imshow(settings.window_name, canvas)
                 if idle >= settings.restart_idle_sec:
                     reopen_stream(state, settings, log, f"idle={idle:.1f}s", camera_count=1)

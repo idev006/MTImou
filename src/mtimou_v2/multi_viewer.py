@@ -26,7 +26,7 @@ def run_multi_camera(camera_ids: list[str] | None, *, log_path, window_name: str
 
     settings = viewer_runtime_settings(log_path=log_path, window_name=window_name)
     log = make_logger(settings.log_path)
-    style = overlay_style()
+    style = overlay_style(single_view=False)
     states = [build_stream_state(camera, settings, camera_count=len(cameras)) for camera in cameras]
     for state in states:
         log(

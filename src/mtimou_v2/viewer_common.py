@@ -21,16 +21,27 @@ def blank_canvas() -> np.ndarray:
     return np.zeros((720, 1280, 3), dtype=np.uint8)
 
 
-def overlay_style() -> dict[str, float | int]:
+def overlay_style(*, single_view: bool = False) -> dict[str, float | int]:
     import os
 
+    prefix = "IMOU_SINGLE_OVERLAY_" if single_view else "IMOU_MULTI_OVERLAY_"
+    default_title_scale = "0.92" if single_view else "0.62"
+    default_meta_scale = "0.82" if single_view else "0.54"
+    default_small_scale = "0.72" if single_view else "0.50"
+    default_title_thickness = "2"
+    default_meta_thickness = "2" if single_view else "1"
+    default_small_thickness = "2" if single_view else "1"
+
+    def env_value(name: str, default: str) -> str:
+        return os.getenv(f"{prefix}{name}", os.getenv(f"IMOU_OVERLAY_{name}", default))
+
     return {
-        "title_scale": float(os.getenv("IMOU_OVERLAY_TITLE_SCALE", "0.62")),
-        "meta_scale": float(os.getenv("IMOU_OVERLAY_META_SCALE", "0.54")),
-        "small_scale": float(os.getenv("IMOU_OVERLAY_SMALL_SCALE", "0.50")),
-        "title_thickness": int(os.getenv("IMOU_OVERLAY_TITLE_THICKNESS", "2")),
-        "meta_thickness": int(os.getenv("IMOU_OVERLAY_META_THICKNESS", "1")),
-        "small_thickness": int(os.getenv("IMOU_OVERLAY_SMALL_THICKNESS", "1")),
+        "title_scale": float(env_value("TITLE_SCALE", default_title_scale)),
+        "meta_scale": float(env_value("META_SCALE", default_meta_scale)),
+        "small_scale": float(env_value("SMALL_SCALE", default_small_scale)),
+        "title_thickness": int(env_value("TITLE_THICKNESS", default_title_thickness)),
+        "meta_thickness": int(env_value("META_THICKNESS", default_meta_thickness)),
+        "small_thickness": int(env_value("SMALL_THICKNESS", default_small_thickness)),
     }
 
 
