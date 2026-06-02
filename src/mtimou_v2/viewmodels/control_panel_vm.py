@@ -67,6 +67,8 @@ class ControlPanelViewModel:
         return CameraEditorEntry(
             camera_id=camera_id,
             name=f"Camera {index}",
+            group_name="default",
+            tier="standard",
             lan_host="192.168.1.10",
             lan_port=554,
             ddns_host=self.state.ddns_host.strip(),
@@ -76,6 +78,8 @@ class ControlPanelViewModel:
             channel="1",
             subtype="0",
             transport="tcp",
+            remote_wall_subtype="1",
+            remote_focus_subtype="0",
             enabled=True,
             username_env="IMOU_CAMERA_USERNAME",
             password_env_name=password_env,

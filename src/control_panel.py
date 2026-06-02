@@ -49,16 +49,21 @@ ENV_PATH = ROOT_DIR / "camera.env.bat"
 WINDOW_TITLE = "MTImou Control Panel"
 MODE_OPTIONS = ["auto", "lan", "ddns", "public"]
 TABLE_COLUMNS = ["Camera", "LAN", "DDNS", "Public", "Status"]
+TIER_OPTIONS = ["critical", "standard", "archive"]
 INVENTORY_COLUMNS = [
     "Enabled",
     "ID",
     "Name",
+    "Group",
+    "Tier",
     "LAN Host",
     "LAN Port",
     "DDNS Host",
     "DDNS Port",
     "Public Host",
     "Public Port",
+    "Wall",
+    "Focus",
     "Password Env",
 ]
 
@@ -67,6 +72,8 @@ INVENTORY_COLUMNS = [
 class CameraRow:
     camera_id: str
     name: str
+    group_name: str
+    tier: str
     lan: str
     ddns: str
     public: str
@@ -115,6 +122,9 @@ class CameraWizardDialog(QDialog):
 
         self.id_edit = QLineEdit(next_camera_id)
         self.name_edit = QLineEdit(f"Camera {re.sub(r'[^0-9]+', '', next_camera_id) or next_camera_id}")
+        self.group_edit = QLineEdit("default")
+        self.tier_combo = QComboBox()
+        self.tier_combo.addItems(TIER_OPTIONS)
         self.lan_host_edit = QLineEdit("192.168.1.10")
         self.lan_port_spin = QSpinBox()
         self.lan_port_spin.setRange(1, 65535)
@@ -128,18 +138,26 @@ class CameraWizardDialog(QDialog):
         self.public_port_spin.setRange(1, 65535)
         self.public_port_spin.setValue(public_port)
         self.password_env_edit = QLineEdit(f"IMOU_CAM_{re.sub(r'[^A-Za-z0-9]+', '_', next_camera_id).upper()}_PASSWORD")
+        self.wall_subtype_combo = QComboBox()
+        self.wall_subtype_combo.addItems(["1", "0"])
+        self.focus_subtype_combo = QComboBox()
+        self.focus_subtype_combo.addItems(["0", "1"])
         self.enabled_check = QCheckBox("Enable this camera immediately")
         self.enabled_check.setChecked(True)
 
         form = QFormLayout()
         form.addRow("Camera ID", self.id_edit)
         form.addRow("Display Name", self.name_edit)
+        form.addRow("Group", self.group_edit)
+        form.addRow("Tier", self.tier_combo)
         form.addRow("LAN Host", self.lan_host_edit)
         form.addRow("LAN Port", self.lan_port_spin)
         form.addRow("DDNS Host", self.ddns_host_edit)
         form.addRow("DDNS Port", self.ddns_port_spin)
         form.addRow("Public Host", self.public_host_edit)
         form.addRow("Public Port", self.public_port_spin)
+        form.addRow("Wall Subtype", self.wall_subtype_combo)
+        form.addRow("Focus Subtype", self.focus_subtype_combo)
         form.addRow("Password Env", self.password_env_edit)
         form.addRow("", self.enabled_check)
 
@@ -163,12 +181,16 @@ class CameraWizardDialog(QDialog):
         return {
             "camera_id": self.id_edit.text().strip(),
             "name": self.name_edit.text().strip(),
+            "group_name": self.group_edit.text().strip(),
+            "tier": self.tier_combo.currentText().strip(),
             "lan_host": self.lan_host_edit.text().strip(),
             "lan_port": int(self.lan_port_spin.value()),
             "ddns_host": self.ddns_host_edit.text().strip(),
             "ddns_port": int(self.ddns_port_spin.value()),
             "public_host": self.public_host_edit.text().strip(),
             "public_port": int(self.public_port_spin.value()),
+            "remote_wall_subtype": self.wall_subtype_combo.currentText().strip(),
+            "remote_focus_subtype": self.focus_subtype_combo.currentText().strip(),
             "password_env_name": self.password_env_edit.text().strip(),
             "enabled": self.enabled_check.isChecked(),
         }
@@ -212,6 +234,8 @@ class ControlPanelWindow(QMainWindow):
         self.selection_summary = QLabel("No camera selected")
         self.selection_summary.setWordWrap(True)
         self.selection_summary.setObjectName("selectionSummary")
+        self.group_filter_combo = QComboBox()
+        self.group_filter_combo.addItem("All Groups")
 
         self.password_fields: list[PasswordField] = []
         self.inventory_table = QTableWidget(0, len(INVENTORY_COLUMNS))
@@ -236,6 +260,7 @@ class ControlPanelWindow(QMainWindow):
         self._build_ui()
         self._apply_styles()
         self.reload_settings()
+        self._refresh_group_filter()
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(
@@ -457,8 +482,12 @@ class ControlPanelWindow(QMainWindow):
         btn_clear.clicked.connect(self.camera_table.clearSelection)
         btn_enabled = QPushButton("Select Enabled")
         btn_enabled.clicked.connect(self._select_enabled_cameras)
+        btn_group = QPushButton("Select Group")
+        btn_group.clicked.connect(self._select_group_cameras)
         row_buttons.addWidget(btn_select_all)
         row_buttons.addWidget(btn_enabled)
+        row_buttons.addWidget(self.group_filter_combo)
+        row_buttons.addWidget(btn_group)
         row_buttons.addWidget(btn_clear)
         row_buttons.addStretch(1)
         camera_layout.addLayout(row_buttons)
@@ -551,7 +580,7 @@ class ControlPanelWindow(QMainWindow):
         box_layout = QVBoxLayout(box)
 
         helper = QLabel(
-            "Manage N cameras here. Edit network endpoints, enable or disable cameras, and define the password environment key for each camera."
+            "Manage N cameras here. Edit network endpoints, assign each camera to a group, choose a tier, and define separate wall-view and focus-view stream policies."
         )
         helper.setWordWrap(True)
         helper.setStyleSheet("color: #5b6472; font-size: 12px;")
@@ -562,13 +591,17 @@ class ControlPanelWindow(QMainWindow):
         inventory_header.setSectionResizeMode(2, QHeaderView.Stretch)
         self.inventory_table.setColumnWidth(0, 80)
         self.inventory_table.setColumnWidth(1, 90)
-        self.inventory_table.setColumnWidth(3, 130)
-        self.inventory_table.setColumnWidth(4, 80)
-        self.inventory_table.setColumnWidth(5, 210)
-        self.inventory_table.setColumnWidth(6, 90)
-        self.inventory_table.setColumnWidth(7, 130)
+        self.inventory_table.setColumnWidth(3, 120)
+        self.inventory_table.setColumnWidth(4, 90)
+        self.inventory_table.setColumnWidth(5, 130)
+        self.inventory_table.setColumnWidth(6, 80)
+        self.inventory_table.setColumnWidth(7, 210)
         self.inventory_table.setColumnWidth(8, 90)
-        self.inventory_table.setColumnWidth(9, 180)
+        self.inventory_table.setColumnWidth(9, 130)
+        self.inventory_table.setColumnWidth(10, 90)
+        self.inventory_table.setColumnWidth(11, 70)
+        self.inventory_table.setColumnWidth(12, 70)
+        self.inventory_table.setColumnWidth(13, 180)
         box_layout.addWidget(self.inventory_table, 1)
 
         actions = QHBoxLayout()
@@ -597,7 +630,7 @@ class ControlPanelWindow(QMainWindow):
         notes_text = QLabel(
             "Use one public port per camera. A typical pattern is 45554, 45555, 45556, and so on.\n\n"
             "Password Env should match the environment variable in camera.env.bat, for example IMOU_CAM_CAM3_PASSWORD.\n\n"
-            "Keep subtype at 0 in inventory unless you intentionally want the lower-bandwidth substream as the default profile."
+            "Recommended 10-camera strategy: keep Wall subtype at 1 for broad wall views, keep Focus subtype at 0 for detailed single-camera viewing, and organize cameras into groups such as front, side, rear, and indoor."
         )
         notes_text.setWordWrap(True)
         notes_layout.addWidget(notes_text)
@@ -676,6 +709,8 @@ class ControlPanelWindow(QMainWindow):
                 CameraRow(
                     camera_id=camera.camera_id,
                     name=camera.name,
+                    group_name=camera.group_name,
+                    tier=camera.tier,
                     lan=target_segments.get("lan", "-"),
                     ddns=target_segments.get("ddns", "-"),
                     public=target_segments.get("public", "-"),
@@ -726,7 +761,7 @@ class ControlPanelWindow(QMainWindow):
                 ("Disabled" if not row.enabled else "Unknown", "Run health check to verify"),
             )
             values = [
-                f"{row.camera_id} | {row.name}",
+                f"{row.camera_id} | {row.name} | {row.group_name} | {row.tier}",
                 row.lan,
                 row.ddns,
                 row.public,
@@ -776,12 +811,16 @@ class ControlPanelWindow(QMainWindow):
             values = [
                 entry.camera_id,
                 entry.name,
+                entry.group_name,
+                entry.tier,
                 entry.lan_host,
                 str(entry.lan_port),
                 entry.ddns_host,
                 str(entry.ddns_port),
                 entry.public_host,
                 str(entry.public_port),
+                entry.remote_wall_subtype,
+                entry.remote_focus_subtype,
                 entry.password_env_name,
             ]
             for offset, value in enumerate(values, start=1):
@@ -795,19 +834,27 @@ class ControlPanelWindow(QMainWindow):
         enabled_item = self.inventory_table.item(row, 0)
         camera_id_item = self.inventory_table.item(row, 1)
         name_item = self.inventory_table.item(row, 2)
-        lan_host_item = self.inventory_table.item(row, 3)
-        lan_port_item = self.inventory_table.item(row, 4)
-        ddns_host_item = self.inventory_table.item(row, 5)
-        ddns_port_item = self.inventory_table.item(row, 6)
-        public_host_item = self.inventory_table.item(row, 7)
-        public_port_item = self.inventory_table.item(row, 8)
-        password_env_item = self.inventory_table.item(row, 9)
+        group_item = self.inventory_table.item(row, 3)
+        tier_item = self.inventory_table.item(row, 4)
+        lan_host_item = self.inventory_table.item(row, 5)
+        lan_port_item = self.inventory_table.item(row, 6)
+        ddns_host_item = self.inventory_table.item(row, 7)
+        ddns_port_item = self.inventory_table.item(row, 8)
+        public_host_item = self.inventory_table.item(row, 9)
+        public_port_item = self.inventory_table.item(row, 10)
+        wall_subtype_item = self.inventory_table.item(row, 11)
+        focus_subtype_item = self.inventory_table.item(row, 12)
+        password_env_item = self.inventory_table.item(row, 13)
 
         camera_id = (camera_id_item.text() if camera_id_item else "").strip()
         name = (name_item.text() if name_item else "").strip()
+        group_name = (group_item.text() if group_item else "").strip()
+        tier = (tier_item.text() if tier_item else "").strip()
         lan_host = (lan_host_item.text() if lan_host_item else "").strip()
         ddns_host = (ddns_host_item.text() if ddns_host_item else "").strip()
         public_host = (public_host_item.text() if public_host_item else "").strip()
+        remote_wall_subtype = (wall_subtype_item.text() if wall_subtype_item else "").strip()
+        remote_focus_subtype = (focus_subtype_item.text() if focus_subtype_item else "").strip()
         password_env = (password_env_item.text() if password_env_item else "").strip()
 
         if not camera_id:
@@ -829,6 +876,8 @@ class ControlPanelWindow(QMainWindow):
         return CameraEditorEntry(
             camera_id=camera_id,
             name=name or camera_id,
+            group_name=group_name or "default",
+            tier=tier or "standard",
             lan_host=lan_host,
             lan_port=lan_port,
             ddns_host=ddns_host,
@@ -838,6 +887,8 @@ class ControlPanelWindow(QMainWindow):
             channel="1",
             subtype="0",
             transport="tcp",
+            remote_wall_subtype=remote_wall_subtype or "1",
+            remote_focus_subtype=remote_focus_subtype or "0",
             enabled=enabled_item.checkState() == Qt.Checked if enabled_item else True,
             username_env="IMOU_CAMERA_USERNAME",
             password_env_name=password_env,
@@ -855,12 +906,21 @@ class ControlPanelWindow(QMainWindow):
             if entry.camera_id in seen_ids:
                 raise ValueError(f"Row {index}: Duplicate camera ID '{entry.camera_id}'.")
             seen_ids.add(entry.camera_id)
+            if not re.fullmatch(r"[A-Za-z0-9_-]+", entry.group_name):
+                raise ValueError(f"Row {index}: Group should use letters, numbers, dash, or underscore.")
+            if entry.tier not in TIER_OPTIONS:
+                raise ValueError(f"Row {index}: Tier must be one of {', '.join(TIER_OPTIONS)}.")
 
             if not re.fullmatch(r"IMOU_[A-Z0-9_]+", entry.password_env_name):
                 raise ValueError(f"Row {index}: Password env should look like IMOU_CAM_CAM3_PASSWORD.")
             if entry.password_env_name in seen_password_envs:
                 raise ValueError(f"Row {index}: Duplicate password env '{entry.password_env_name}'.")
             seen_password_envs.add(entry.password_env_name)
+
+            if entry.remote_wall_subtype not in {"0", "1"}:
+                raise ValueError(f"Row {index}: Wall subtype must be 0 or 1.")
+            if entry.remote_focus_subtype not in {"0", "1"}:
+                raise ValueError(f"Row {index}: Focus subtype must be 0 or 1.")
 
             for label, port in [("LAN", entry.lan_port), ("DDNS", entry.ddns_port), ("Public", entry.public_port)]:
                 if port < 1 or port > 65535:
@@ -965,6 +1025,18 @@ class ControlPanelWindow(QMainWindow):
         draft = self.vm.new_camera_entry(existing_ids)
         return draft.camera_id, draft.public_port
 
+    def _refresh_group_filter(self) -> None:
+        current = self.group_filter_combo.currentText()
+        groups = sorted({camera.group_name for camera in self.vm.state.cameras if camera.group_name})
+        self.group_filter_combo.blockSignals(True)
+        self.group_filter_combo.clear()
+        self.group_filter_combo.addItem("All Groups")
+        for group in groups:
+            self.group_filter_combo.addItem(group)
+        if current and self.group_filter_combo.findText(current) >= 0:
+            self.group_filter_combo.setCurrentText(current)
+        self.group_filter_combo.blockSignals(False)
+
     def _refresh_selection_summary(self) -> None:
         rows = self.selected_camera_rows()
         if not rows:
@@ -977,8 +1049,11 @@ class ControlPanelWindow(QMainWindow):
             )
             return
         names = ", ".join(row["camera"].split(" | ", 1)[1] for row in rows)
+        groups = sorted({row["group_name"] for row in rows if row["group_name"]})
         self.selection_summary.setText(
-            f"Selected {len(rows)} cameras for multi-view: {names}"
+            f"Selected {len(rows)} cameras for multi-view"
+            + (f" across groups {', '.join(groups)}" if groups else "")
+            + f": {names}"
         )
 
     def selected_camera_rows(self) -> list[dict[str, str]]:
@@ -993,6 +1068,7 @@ class ControlPanelWindow(QMainWindow):
                 {
                     "camera_id": str(self.camera_table.item(row, 0).data(Qt.UserRole)),
                     "camera": self.camera_table.item(row, 0).text(),
+                    "group_name": self.camera_table.item(row, 0).text().split(" | ")[2] if len(self.camera_table.item(row, 0).text().split(" | ")) >= 3 else "",
                     "lan": self.camera_table.item(row, 1).text(),
                     "ddns": self.camera_table.item(row, 2).text(),
                     "public": self.camera_table.item(row, 3).text(),
@@ -1013,6 +1089,21 @@ class ControlPanelWindow(QMainWindow):
         for row in range(self.camera_table.rowCount()):
             status_item = self.camera_table.item(row, 4)
             if status_item is not None and status_item.text() != "Disabled":
+                self.camera_table.selectRow(row)
+        self._refresh_selection_summary()
+
+    def _select_group_cameras(self) -> None:
+        selected_group = self.group_filter_combo.currentText().strip()
+        if not selected_group or selected_group == "All Groups":
+            self._select_all_cameras()
+            return
+        self.camera_table.clearSelection()
+        for row in range(self.camera_table.rowCount()):
+            label_item = self.camera_table.item(row, 0)
+            if label_item is None:
+                continue
+            parts = label_item.text().split(" | ")
+            if len(parts) >= 3 and parts[2] == selected_group:
                 self.camera_table.selectRow(row)
         self._refresh_selection_summary()
 
@@ -1047,6 +1138,8 @@ class ControlPanelWindow(QMainWindow):
         entry = CameraEditorEntry(
             camera_id=str(payload["camera_id"]),
             name=str(payload["name"]) or str(payload["camera_id"]),
+            group_name=str(payload["group_name"]) or "default",
+            tier=str(payload["tier"]) or "standard",
             lan_host=str(payload["lan_host"]),
             lan_port=int(payload["lan_port"]),
             ddns_host=str(payload["ddns_host"]),
@@ -1056,6 +1149,8 @@ class ControlPanelWindow(QMainWindow):
             channel="1",
             subtype="0",
             transport="tcp",
+            remote_wall_subtype=str(payload["remote_wall_subtype"]) or "1",
+            remote_focus_subtype=str(payload["remote_focus_subtype"]) or "0",
             enabled=bool(payload["enabled"]),
             username_env="IMOU_CAMERA_USERNAME",
             password_env_name=str(payload["password_env_name"]),
@@ -1098,6 +1193,7 @@ class ControlPanelWindow(QMainWindow):
         self.vm.save_camera_inventory(entries)
         self._rebuild_password_fields()
         self._refresh_health_snapshot()
+        self._refresh_group_filter()
         self._refresh_camera_table()
         self._refresh_inventory_table()
         self._update_metric_cards()

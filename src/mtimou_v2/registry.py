@@ -80,6 +80,8 @@ def load_cameras(config_path: Path | None = None) -> list[CameraConfig]:
             CameraConfig(
                 camera_id=str(item["id"]),
                 name=str(item.get("name", item["id"])),
+                group_name=str(item.get("group_name", "default")).strip() or "default",
+                tier=str(item.get("tier", "standard")).strip() or "standard",
                 lan_host=str(item["lan_host"]),
                 lan_port=int(item.get("lan_port", 554)),
                 ddns_host=resolve_ddns_host(item),
@@ -89,6 +91,8 @@ def load_cameras(config_path: Path | None = None) -> list[CameraConfig]:
                 channel=str(item.get("channel", "1")),
                 subtype=str(item.get("subtype", "0")),
                 transport=str(item.get("transport", "tcp")),
+                remote_wall_subtype=str(item.get("remote_wall_subtype", "1")).strip() or "1",
+                remote_focus_subtype=str(item.get("remote_focus_subtype", "0")).strip() or "0",
                 username=resolve_username(item),
                 password=resolve_password(item),
                 enabled=bool(item.get("enabled", True)),
@@ -114,4 +118,3 @@ def target_modes_summary(camera: CameraConfig) -> list[str]:
         modes.append(f"ddns={camera.ddns_host}:{camera.ddns_port}")
     modes.append(f"public={camera.public_host}:{camera.public_port}")
     return modes
-

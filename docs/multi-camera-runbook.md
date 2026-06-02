@@ -28,6 +28,20 @@ cd /d F:\programming\python\MTImou
 run_multi_camera_stable.bat cam1 cam2
 ```
 
+High-FPS split view:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_multi_camera_high_fps.bat cam1 cam2
+```
+
+Source capability check:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_source_capability_check.bat cam1 cam2
+```
+
 ## Health Check
 
 ```bat
@@ -57,12 +71,45 @@ Grid behavior:
 - `2 cameras` -> `1x2`
 - `3-4 cameras` -> `2x2`
 - `5-9 cameras` -> `3x3`
+- `10-16 cameras` -> grouped wall-view is recommended over one giant always-on board
 
 Optional manual override:
 
 ```bat
 set IMOU_MULTI_GRID_COLS=2
 ```
+
+## 10-Camera Operating Model
+
+For larger deployments, each camera should carry:
+
+- `group_name`
+- `tier`
+- `remote_wall_subtype`
+- `remote_focus_subtype`
+
+Recommended defaults:
+
+- `remote_wall_subtype=1`
+- `remote_focus_subtype=0`
+
+Suggested usage:
+
+- wall view:
+  - all enabled cameras or one selected group
+  - use substream to protect total system FPS
+- focus view:
+  - selected cameras only
+  - use split-view mode with mainstream
+
+Suggested groups:
+
+- `front`
+- `side`
+- `rear`
+- `gate`
+- `parking`
+- `indoor`
 
 ## Current Mapping
 
@@ -97,3 +144,4 @@ set IMOU_DDNS_HOST=YOUR-HOSTNAME.ddns.net
 - In `auto` mode, reconnects re-check `LAN`, then `DDNS`, then `public`
 - A bad camera should not drag down a healthy camera in multi-view
 - If a camera shows repeated auth failures, verify its password env in `camera.env.bat`
+- If FPS is unexpectedly low, run `run_source_capability_check.bat` before tuning the viewer

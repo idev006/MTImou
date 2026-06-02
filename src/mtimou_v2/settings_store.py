@@ -98,9 +98,10 @@ class BatchEnvSettingsStore:
                 CameraListItem(
                     camera_id=camera.camera_id,
                     name=camera.name,
-                    label=f"{camera.camera_id} | {camera.name} | {' ; '.join(target_modes_summary(camera))}",
+                    group_name=camera.group_name,
+                    tier=camera.tier,
+                    label=f"{camera.camera_id} | {camera.name} | group={camera.group_name} | tier={camera.tier} | {' ; '.join(target_modes_summary(camera))}",
                     enabled=camera.enabled,
                 )
             )
         return document, state
-

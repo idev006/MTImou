@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 class CameraListItem:
     camera_id: str
     name: str
+    group_name: str
+    tier: str
     label: str
     enabled: bool
 
@@ -23,6 +25,8 @@ class PasswordEntry:
 class CameraEditorEntry:
     camera_id: str
     name: str
+    group_name: str
+    tier: str
     lan_host: str
     lan_port: int
     ddns_host: str
@@ -32,6 +36,8 @@ class CameraEditorEntry:
     channel: str
     subtype: str
     transport: str
+    remote_wall_subtype: str
+    remote_focus_subtype: str
     enabled: bool
     username_env: str
     password_env_name: str

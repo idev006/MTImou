@@ -130,10 +130,10 @@ def effective_camera_profile(
 ) -> CameraConfig:
     subtype = camera.subtype
     if target_mode in {"ddns", "public"}:
-        if camera_count > 1 and settings.remote_multi_subtype:
-            subtype = settings.remote_multi_subtype
-        elif camera_count <= 1 and settings.remote_single_subtype:
-            subtype = settings.remote_single_subtype
+        if camera_count > 1:
+            subtype = camera.remote_wall_subtype or settings.remote_multi_subtype or subtype
+        else:
+            subtype = camera.remote_focus_subtype or settings.remote_single_subtype or subtype
     if subtype == camera.subtype:
         return camera
     return replace(camera, subtype=subtype)

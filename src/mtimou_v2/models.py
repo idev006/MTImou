@@ -10,6 +10,8 @@ import numpy as np
 class CameraConfig:
     camera_id: str
     name: str
+    group_name: str
+    tier: str
     lan_host: str
     lan_port: int
     ddns_host: str
@@ -19,6 +21,8 @@ class CameraConfig:
     channel: str
     subtype: str
     transport: str
+    remote_wall_subtype: str
+    remote_focus_subtype: str
     username: str
     password: str
     enabled: bool

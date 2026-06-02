@@ -75,6 +75,7 @@ Grid behavior:
 - `2 cameras` -> `1x2`
 - `3-4 cameras` -> `2x2`
 - `5-9 cameras` -> `3x3`
+- `10-16 cameras` -> square-ish grid, but grouped wall views are recommended over one giant always-on board
 
 Backward-compatible default:
 
@@ -142,6 +143,30 @@ Notes:
 - `run_multi_camera_high_fps.bat` now defaults to main stream (`subtype=0`) so it does not artificially cap source FPS
 - If you need the highest practical FPS per camera, use `run_multi_camera_high_fps.bat` so each camera runs in its own viewer process
 - Use `run_source_capability_check.bat` to separate camera-source limits from viewer/runtime limits before tuning further
+
+## N-Camera Strategy
+
+The production model now supports `N cameras` with data-driven fields per camera:
+
+- `group_name`
+- `tier`
+- `remote_wall_subtype`
+- `remote_focus_subtype`
+
+Recommended operating pattern for 10 cameras:
+
+- wall view:
+  - group-based or all-enabled
+  - `remote_wall_subtype=1`
+- focus view:
+  - selected cameras only
+  - `remote_focus_subtype=0`
+
+The control panel now lets the operator:
+
+- manage group and tier per camera
+- select cameras by group
+- define wall vs focus stream policy per camera
 
 ## Public / Worldwide Access
 
@@ -225,6 +250,12 @@ Operational and architecture documents live in [`docs`](./docs):
 - [`docs/19-actors-usecases-sequences.md`](./docs/19-actors-usecases-sequences.md)
 - [`docs/20-ui-mvvm-ssot-architecture.md`](./docs/20-ui-mvvm-ssot-architecture.md)
 - [`docs/21-robustness-process-engineering.md`](./docs/21-robustness-process-engineering.md)
+- [`docs/22-ten-camera-architecture.md`](./docs/22-ten-camera-architecture.md)
+
+Scale-out templates:
+
+- [`cameras.scaleout.template.json`](./cameras.scaleout.template.json)
+- [`cameras.ten-camera.template.json`](./cameras.ten-camera.template.json)
 
 ## Legacy Archive
 
