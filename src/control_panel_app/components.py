@@ -219,3 +219,58 @@ class PresetDialog(QDialog):
             "description": self.description_edit.text().strip(),
             "launch_mode": self.launch_mode_combo.currentText().strip(),
         }
+
+
+class FirstRunGuideDialog(QDialog):
+    def __init__(self, *, issues: list[str], tips: list[str], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("First-Run Setup Guide")
+        self.setModal(True)
+        self.resize(620, 420)
+        self.target_tab: str | None = None
+
+        intro = QLabel(
+            "MTImou is almost ready. Let's finish the minimum setup so the control panel can launch cameras reliably."
+        )
+        intro.setWordWrap(True)
+
+        body = QLabel(self._build_body_text(issues, tips))
+        body.setWordWrap(True)
+        body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+        button_row = QHBoxLayout()
+        open_settings = QPushButton("Open Settings")
+        open_settings.clicked.connect(lambda: self._accept_with_target("settings"))
+        open_inventory = QPushButton("Open Camera Management")
+        open_inventory.clicked.connect(lambda: self._accept_with_target("inventory"))
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.accept)
+        button_row.addWidget(open_settings)
+        button_row.addWidget(open_inventory)
+        button_row.addStretch(1)
+        button_row.addWidget(close_button)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
+        layout.addWidget(body)
+        layout.addStretch(1)
+        layout.addLayout(button_row)
+
+    def _accept_with_target(self, target: str) -> None:
+        self.target_tab = target
+        self.accept()
+
+    @staticmethod
+    def _build_body_text(issues: list[str], tips: list[str]) -> str:
+        lines: list[str] = []
+        if issues:
+            lines.append("Finish these first:")
+            lines.extend(f"- {issue}" for issue in issues)
+        if tips:
+            if lines:
+                lines.append("")
+            lines.append("Helpful next steps:")
+            lines.extend(f"- {tip}" for tip in tips)
+        if not lines:
+            lines.append("No first-run setup items are pending.")
+        return "\n".join(lines)

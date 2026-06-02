@@ -25,6 +25,7 @@ Multi-camera IMOU RTSP viewer for LAN and worldwide access, with automatic targe
 - Starter local settings are provided in [`camera.env.bat.example`](./camera.env.bat.example)
 - Recommended N-camera password naming: `IMOU_CAM_<CAMERA_ID_UPPER>_PASSWORD`
 - Camera registry lives in [`cameras.json`](./cameras.json)
+- A generic starter inventory is available in [`cameras.example.json`](./cameras.example.json)
 - Starter selection presets are provided in [`camera_presets.example.json`](./camera_presets.example.json)
 
 ## Quick Start
@@ -53,7 +54,14 @@ What `setup_windows.bat` does:
 - installs pinned dependencies from [`requirements.txt`](./requirements.txt)
 - creates `camera.env.bat` from [`camera.env.bat.example`](./camera.env.bat.example) if it is missing
 - creates `camera_presets.json` from [`camera_presets.example.json`](./camera_presets.example.json) if it is missing
+- keeps [`cameras.example.json`](./cameras.example.json) in the repo as a clean reference when you want to replace the house-specific starter inventory
 - leaves your existing `.venv` and camera config in place if they already exist
+
+First-run help in the UI:
+
+- when placeholder values or missing passwords are detected, the control panel now shows a `Quick Setup` box on the dashboard
+- the same first-run guide also opens automatically once per outstanding setup checklist
+- use `Open Settings` for credentials/DDNS and `Open Camera Management` for camera inventory
 
 Single camera:
 

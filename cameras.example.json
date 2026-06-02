@@ -1,0 +1,44 @@
+{
+  "cameras": [
+    {
+      "id": "cam1",
+      "name": "Front Gate",
+      "group_name": "front",
+      "tier": "critical",
+      "lan_host": "192.168.1.10",
+      "lan_port": 554,
+      "ddns_host": "your-home.ddns.net",
+      "ddns_port": 45554,
+      "public_host": "203.0.113.10",
+      "public_port": 45554,
+      "channel": "1",
+      "subtype": "0",
+      "transport": "tcp",
+      "remote_wall_subtype": "1",
+      "remote_focus_subtype": "0",
+      "username_env": "IMOU_CAMERA_USERNAME",
+      "password_envs": ["IMOU_CAM_CAM1_PASSWORD"],
+      "enabled": true
+    },
+    {
+      "id": "cam2",
+      "name": "Parking",
+      "group_name": "parking",
+      "tier": "standard",
+      "lan_host": "192.168.1.11",
+      "lan_port": 554,
+      "ddns_host": "your-home.ddns.net",
+      "ddns_port": 45555,
+      "public_host": "203.0.113.10",
+      "public_port": 45555,
+      "channel": "1",
+      "subtype": "0",
+      "transport": "tcp",
+      "remote_wall_subtype": "1",
+      "remote_focus_subtype": "0",
+      "username_env": "IMOU_CAMERA_USERNAME",
+      "password_envs": ["IMOU_CAM_CAM2_PASSWORD"],
+      "enabled": true
+    }
+  ]
+}

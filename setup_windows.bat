@@ -78,7 +78,7 @@ if not exist "logs" mkdir "logs" >nul 2>nul
 echo [INFO] Setup completed.
 echo [INFO] Next steps:
 echo        1. Edit camera.env.bat if needed
-echo        2. Review cameras.json
+echo        2. Review cameras.json ^(or compare with cameras.example.json if you are starting from scratch^)
 echo        3. Run run_doctor.bat
 echo        4. Run run_control_panel.bat
 exit /b 0

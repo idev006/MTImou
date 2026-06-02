@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import QProcess, QSettings, Qt
+from PySide6.QtCore import QProcess, QSettings, QTimer, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from control_panel_app.actions_mixin import ControlPanelActionsMixin
-from control_panel_app.components import CollapsibleSection, MetricCard
+from control_panel_app.components import CollapsibleSection, FirstRunGuideDialog, MetricCard
 from control_panel_app.constants import ENV_PATH, INVENTORY_COLUMNS, MODE_OPTIONS, ROOT_DIR, TABLE_COLUMNS, TIER_OPTIONS, WINDOW_TITLE
 from control_panel_app.state_mixin import ControlPanelStateMixin
 from mtimou_v2.viewmodels.control_panel_vm import ControlPanelViewModel
@@ -141,6 +141,7 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         self._refresh_group_filter()
         self._restore_ui_state()
         self._update_dashboard_breakpoint()
+        QTimer.singleShot(0, self._maybe_show_first_run_guidance)
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(
@@ -414,6 +415,27 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         action_box = QGroupBox("Launch & Validation")
         action_layout = QVBoxLayout(action_box)
         action_layout.setSpacing(10)
+
+        self.first_run_box = QGroupBox("Quick Setup")
+        first_run_layout = QVBoxLayout(self.first_run_box)
+        self.first_run_label = QLabel("")
+        self.first_run_label.setWordWrap(True)
+        self.first_run_label.setStyleSheet("color: #4b5563;")
+        first_run_layout.addWidget(self.first_run_label)
+
+        first_run_buttons = QHBoxLayout()
+        setup_guide_button = QPushButton("Show Setup Guide")
+        setup_guide_button.clicked.connect(lambda: self._show_first_run_guidance(force=True))
+        settings_button = QPushButton("Open Settings")
+        settings_button.clicked.connect(lambda: self.tabs.setCurrentIndex(1))
+        inventory_button = QPushButton("Open Camera Management")
+        inventory_button.clicked.connect(lambda: self.tabs.setCurrentIndex(2))
+        first_run_buttons.addWidget(setup_guide_button)
+        first_run_buttons.addWidget(settings_button)
+        first_run_buttons.addWidget(inventory_button)
+        first_run_buttons.addStretch(1)
+        first_run_layout.addLayout(first_run_buttons)
+        action_layout.addWidget(self.first_run_box)
 
         button_specs = [
             ("View Selected Cameras", self.launch_selected_cameras, True),
@@ -718,6 +740,33 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
             self.dashboard_splitter.setSizes([620, 340])
         else:
             self.dashboard_splitter.setSizes([900, 460])
+
+    def _maybe_show_first_run_guidance(self) -> None:
+        issues = self._collect_first_run_issues()
+        tips = self._collect_first_run_tips()
+        if not issues and not tips:
+            return
+        signature = "||".join([f"req:{item}" for item in issues] + [f"tip:{item}" for item in tips])
+        last_signature = str(self.ui_settings.value("onboarding/last_seen_signature", "") or "")
+        if signature and signature == last_signature:
+            return
+        self._show_first_run_guidance(force=True)
+
+    def _show_first_run_guidance(self, *, force: bool = False) -> None:
+        issues = self._collect_first_run_issues()
+        tips = self._collect_first_run_tips()
+        if not force and not issues and not tips:
+            return
+        signature = "||".join([f"req:{item}" for item in issues] + [f"tip:{item}" for item in tips])
+        dialog = FirstRunGuideDialog(issues=issues, tips=tips, parent=self)
+        dialog.exec()
+        if signature:
+            self.ui_settings.setValue("onboarding/last_seen_signature", signature)
+            self.ui_settings.sync()
+        if dialog.target_tab == "settings":
+            self.tabs.setCurrentIndex(1)
+        elif dialog.target_tab == "inventory":
+            self.tabs.setCurrentIndex(2)
 
     def _restore_ui_state(self) -> None:
         geometry = self.ui_settings.value("window/geometry")

@@ -127,6 +127,7 @@ class ControlPanelStateMixin:
         self.camera_table.resizeRowsToContents()
         self._apply_camera_table_filters()
         self._refresh_selection_summary()
+        self._refresh_first_run_guidance()
 
     def _refresh_inventory_table(self) -> None:
         entries = self.vm.state.camera_editor_entries
@@ -161,6 +162,7 @@ class ControlPanelStateMixin:
             self.inventory_table.resizeRowsToContents()
         finally:
             self._suspend_inventory_dirty_tracking = False
+        self._refresh_first_run_guidance()
 
     def _inventory_row_to_entry(self, row: int):
         from mtimou_v2.app_state import CameraEditorEntry
@@ -531,3 +533,53 @@ class ControlPanelStateMixin:
         self.metric_critical.set_value(str(critical_count), "Enabled critical cameras")
         self.metric_standard.set_value(str(standard_count), "Enabled standard cameras")
         self.metric_archive.set_value(str(archive_count), "Enabled archive cameras")
+
+    def _collect_first_run_issues(self) -> list[str]:
+        issues: list[str] = []
+        values = getattr(getattr(self.vm, "document", None), "values", {})
+        if any("YOUR_" in value for value in values.values()):
+            issues.append("Replace placeholder values in camera.env.bat, especially camera passwords and any optional OpenAPI keys.")
+
+        missing_passwords = [
+            f"{entry.camera_name} ({entry.camera_id})"
+            for entry in self.vm.state.password_entries
+            if not entry.value.strip() or "YOUR_" in entry.value
+        ]
+        if missing_passwords:
+            issues.append("Fill in camera passwords for: " + ", ".join(missing_passwords))
+
+        if not self.vm.state.camera_editor_entries:
+            issues.append("Add at least one camera in Camera Management.")
+        elif not any(entry.enabled for entry in self.vm.state.camera_editor_entries):
+            issues.append("Enable at least one camera in Camera Management before launching viewers.")
+
+        return issues
+
+    def _collect_first_run_tips(self) -> list[str]:
+        tips: list[str] = []
+        if not self.ddns_edit.text().strip():
+            tips.append("Add a shared DDNS host in Settings when you want stable remote access outside the home network.")
+        if not self.vm.state.selection_presets:
+            tips.append("Create a preset after your first successful launch so daily operation is one click.")
+        return tips
+
+    def _refresh_first_run_guidance(self) -> None:
+        if not hasattr(self, "first_run_box"):
+            return
+        issues = self._collect_first_run_issues()
+        tips = self._collect_first_run_tips()
+        visible = bool(issues or tips)
+        self.first_run_box.setVisible(visible)
+        if not visible:
+            return
+
+        lines: list[str] = []
+        if issues:
+            lines.append("Finish these first:")
+            lines.extend(f"- {issue}" for issue in issues)
+        if tips:
+            if lines:
+                lines.append("")
+            lines.append("Helpful next steps:")
+            lines.extend(f"- {tip}" for tip in tips)
+        self.first_run_label.setText("\n".join(lines))

@@ -11,6 +11,7 @@ venv_old_*/
 
 # Secrets / local env
 camera.env.bat
+camera_presets.json
 *.env
 
 # Logs and runtime artifacts
