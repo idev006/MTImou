@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import tempfile
 
 from mtimou_v2.app_state import CameraListItem, OperatorSettingsState, PasswordEntry
 from mtimou_v2.registry import default_password_env_names, load_cameras, target_modes_summary
+
+
+MAX_ENV_FILE_BYTES = 256 * 1024
 
 
 def unescape_batch_value(value: str) -> str:
@@ -31,10 +35,26 @@ class BatchEnvSettingsStore:
     def __init__(self, env_path: Path) -> None:
         self.env_path = env_path
 
+    def _write_lines_atomic(self, lines: list[str]) -> None:
+        payload = "\r\n".join(lines)
+        if payload:
+            payload += "\r\n"
+        fd, temp_path = tempfile.mkstemp(prefix=self.env_path.name + ".", suffix=".tmp", dir=str(self.env_path.parent))
+        try:
+            with open(fd, "w", encoding="ascii", newline="") as handle:
+                handle.write(payload)
+            Path(temp_path).replace(self.env_path)
+        finally:
+            temp_file = Path(temp_path)
+            if temp_file.exists():
+                temp_file.unlink()
+
     def load_document(self) -> SettingsDocument:
         lines: list[str] = []
         values: dict[str, str] = {}
         if self.env_path.exists():
+            original_size = self.env_path.stat().st_size
+            needs_compaction = original_size > MAX_ENV_FILE_BYTES
             previous_blank = False
             with self.env_path.open("r", encoding="ascii", errors="ignore") as handle:
                 for raw_line in handle:
@@ -46,6 +66,8 @@ class BatchEnvSettingsStore:
                         # on the next save.
                         if lines and not previous_blank:
                             lines.append("")
+                        elif previous_blank:
+                            needs_compaction = True
                         previous_blank = True
                         continue
                     previous_blank = False
@@ -56,6 +78,12 @@ class BatchEnvSettingsStore:
                             payload = payload[1:-1]
                         key, value = payload.split("=", 1)
                         values[key.strip()] = unescape_batch_value(value.strip())
+            if lines and not lines[-1].strip():
+                while lines and not lines[-1].strip():
+                    lines.pop()
+                needs_compaction = True
+            if needs_compaction:
+                self._write_lines_atomic(lines)
         return SettingsDocument(lines=lines, values=values)
 
     def save_document(self, document: SettingsDocument, updates: dict[str, str]) -> SettingsDocument:
@@ -78,7 +106,9 @@ class BatchEnvSettingsStore:
                 new_lines.append("")
             for key, value in remaining.items():
                 new_lines.append(f'set "{key}={escape_batch_value(value)}"')
-        self.env_path.write_text("\r\n".join(new_lines) + "\r\n", encoding="ascii")
+        while new_lines and not new_lines[-1].strip():
+            new_lines.pop()
+        self._write_lines_atomic(new_lines)
         return self.load_document()
 
     def load_state(self) -> tuple[SettingsDocument, OperatorSettingsState]:
