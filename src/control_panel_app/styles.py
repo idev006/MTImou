@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from PySide6.QtGui import QColor, QPalette
 
 
 DEFAULT_COMPACT_UI = True
+ASSET_DIR = Path(__file__).with_name("assets")
+SPIN_UP_ARROW = (ASSET_DIR / "spin_up.svg").as_posix()
+SPIN_DOWN_ARROW = (ASSET_DIR / "spin_down.svg").as_posix()
 
 
 @dataclass(frozen=True, slots=True)
@@ -380,6 +384,8 @@ def build_stylesheet(compact: bool) -> str:
                 border-radius: {metrics["input_radius"]};
                 background: #ffffff;
                 selection-background-color: #dbeafe;
+                selection-color: #172233;
+                color: #172233;
             }}
             QLineEdit, QComboBox {{
                 min-height: {metrics["input_height"]};
@@ -393,6 +399,23 @@ def build_stylesheet(compact: bool) -> str:
                 padding: 1px 22px 1px 6px;
                 font-size: {metrics["input_font_size"]};
             }}
+            QDoubleSpinBox::up-button, QSpinBox::up-button {{
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: {metrics["spin_button_width"]};
+                background: #f8fafc;
+                border-left: 1px solid #d0d9e7;
+                border-top-right-radius: {metrics["input_radius"]};
+            }}
+            QDoubleSpinBox::down-button, QSpinBox::down-button {{
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                width: {metrics["spin_button_width"]};
+                background: #f8fafc;
+                border-left: 1px solid #d0d9e7;
+                border-top: 1px solid #d0d9e7;
+                border-bottom-right-radius: {metrics["input_radius"]};
+            }}
             QDoubleSpinBox::up-button, QDoubleSpinBox::down-button, QSpinBox::up-button, QSpinBox::down-button {{
                 width: {metrics["spin_button_width"]};
                 background: #f8fafc;
@@ -400,6 +423,16 @@ def build_stylesheet(compact: bool) -> str:
             }}
             QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover, QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
                 background: #eef6ff;
+            }}
+            QDoubleSpinBox::up-arrow, QSpinBox::up-arrow {{
+                image: url({SPIN_UP_ARROW});
+                width: 8px;
+                height: 5px;
+            }}
+            QDoubleSpinBox::down-arrow, QSpinBox::down-arrow {{
+                image: url({SPIN_DOWN_ARROW});
+                width: 8px;
+                height: 5px;
             }}
             QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTableWidget:focus, QDoubleSpinBox:focus, QSpinBox:focus {{
                 border: 1px solid #2374e1;
