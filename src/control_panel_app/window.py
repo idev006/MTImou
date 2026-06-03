@@ -322,6 +322,8 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         button_specs = [
             ("View Selected Cameras", self.launch_selected_cameras, True),
             ("View Selected Cameras (High FPS)", self.launch_selected_cameras_high_fps, False),
+            ("Show Selected Stream URLs", self.show_selected_stream_urls, False),
+            ("Copy Selected Stream URLs", self.copy_selected_stream_urls, False),
             ("View All Enabled Cameras", self.launch_all_cameras, False),
             ("View Critical Cameras", self.launch_critical_cameras, False),
             ("View Critical Cameras (High FPS)", self.launch_critical_cameras_high_fps, False),

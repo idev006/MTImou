@@ -6,6 +6,9 @@ from PySide6.QtWidgets import QApplication, QLineEdit, QMessageBox
 from control_panel_app.components import CameraWizardDialog, PresetDialog
 from control_panel_app.constants import ENV_PATH, ROOT_DIR, WINDOW_TITLE
 from mtimou_v2.app_state import OperatorSettingsState
+from mtimou_v2.models import CameraTarget
+from mtimou_v2.registry import get_camera
+from mtimou_v2.rtsp import build_rtsp_url
 from mtimou_v2.settings_store import (
     DEFAULT_MULTI_OVERLAY_META_SCALE,
     DEFAULT_MULTI_OVERLAY_SMALL_SCALE,
@@ -18,6 +21,59 @@ from mtimou_v2.text_encoding import decode_text_bytes
 
 
 class ControlPanelActionsMixin:
+    def _build_stream_export_text(self, camera_ids: list[str]) -> tuple[str, str]:
+        preview_blocks: list[str] = []
+        raw_blocks: list[str] = []
+        for camera_id in camera_ids:
+            camera = get_camera(camera_id)
+            preview_lines = [f"[{camera.camera_id}] {camera.name}"]
+            raw_lines = [f"[{camera.camera_id}] {camera.name}"]
+            target_count = 0
+            targets = [
+                ("lan", camera.lan_host, camera.lan_port),
+                ("ddns", camera.ddns_host, camera.ddns_port),
+                ("public", camera.public_host, camera.public_port),
+            ]
+            for mode, host, port in targets:
+                if not host:
+                    continue
+                target_count += 1
+                target = CameraTarget(camera=camera, mode=mode, host=host, port=port)
+                url, safe_url = build_rtsp_url(camera, target)
+                preview_url = url if self.show_passwords_checkbox.isChecked() else safe_url
+                preview_lines.append(f"- {mode}: {host}:{port}")
+                preview_lines.append(f"  rtsp: {preview_url}")
+                raw_lines.append(f"- {mode}: {host}:{port}")
+                raw_lines.append(f"  rtsp: {url}")
+            if target_count == 0:
+                preview_lines.append("- no stream target configured")
+                raw_lines.append("- no stream target configured")
+            preview_blocks.append("\n".join(preview_lines))
+            raw_blocks.append("\n".join(raw_lines))
+        return "\n\n".join(preview_blocks), "\n\n".join(raw_blocks)
+
+    def show_selected_stream_urls(self) -> None:
+        camera_ids = self.selected_camera_ids()
+        if not camera_ids:
+            QMessageBox.warning(self, WINDOW_TITLE, "Please select one or more cameras first.")
+            return
+        preview_text, _raw_text = self._build_stream_export_text(camera_ids)
+        self.append_output("[INFO] Stream URLs for external apps:")
+        self.append_output(preview_text)
+        if not self.show_passwords_checkbox.isChecked():
+            self.append_output("[INFO] Enable Show passwords to display full RTSP URLs in the panel.")
+        self._set_status(f"Displayed stream URLs for {len(camera_ids)} camera(s)")
+
+    def copy_selected_stream_urls(self) -> None:
+        camera_ids = self.selected_camera_ids()
+        if not camera_ids:
+            QMessageBox.warning(self, WINDOW_TITLE, "Please select one or more cameras first.")
+            return
+        _preview_text, raw_text = self._build_stream_export_text(camera_ids)
+        QApplication.clipboard().setText(raw_text)
+        self.append_output(f"[INFO] Copied stream URLs for {len(camera_ids)} camera(s) to clipboard")
+        self._set_status(f"Copied stream URLs for {len(camera_ids)} camera(s)")
+
     def _prompt_unsaved_inventory_decision(self, action_label: str) -> str:
         dialog = QMessageBox(self)
         dialog.setWindowTitle(WINDOW_TITLE)

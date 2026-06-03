@@ -32,6 +32,7 @@ Build a production-grade Python service that reliably obtains live video streams
 4. The system shall decode and emit frames for analysis pipeline.
 5. The system shall auto-reconnect on tunnel or stream loss.
 6. The system shall support configuration via environment variables or config file.
+7. The system shall display and allow copying exportable stream endpoints, including RTSP targets, so operators can reuse them in external programs.
 
 ## 5. Non-Functional Requirements
 
@@ -58,4 +59,3 @@ Build a production-grade Python service that reliably obtains live video streams
 - A demo script can connect, decode, and print frame timestamps for 30 minutes.
 - Forced network interruption test recovers automatically without process restart.
 - Failures produce structured log events with root-cause category.
-

@@ -219,6 +219,7 @@ The control panel now lets the operator:
 - select cameras by group
 - filter cameras by group and tier
 - search large inventories
+- display or copy LAN / DDNS / public RTSP targets for the selected cameras so they can be pasted into other tools
 - save and reuse selection presets
 - add preset description and default launch mode
 - launch `critical` tier cameras directly
