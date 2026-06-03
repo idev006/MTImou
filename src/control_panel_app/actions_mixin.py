@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from PySide6.QtCore import QItemSelectionModel, QProcess, Qt
 from PySide6.QtWidgets import QApplication, QLineEdit, QMessageBox
 
@@ -21,9 +23,16 @@ from mtimou_v2.text_encoding import decode_text_bytes
 
 
 class ControlPanelActionsMixin:
-    def _build_stream_export_text(self, camera_ids: list[str]) -> tuple[str, str]:
+    def _build_stream_export_text(
+        self,
+        camera_ids: list[str],
+        *,
+        mode_filter: str | None = None,
+        subtype_override: str | None = None,
+    ) -> tuple[str, str, int]:
         preview_blocks: list[str] = []
         raw_blocks: list[str] = []
+        matched_targets = 0
         for camera_id in camera_ids:
             camera = get_camera(camera_id)
             preview_lines = [f"[{camera.camera_id}] {camera.name}"]
@@ -35,11 +44,13 @@ class ControlPanelActionsMixin:
                 ("public", camera.public_host, camera.public_port),
             ]
             for mode, host, port in targets:
-                if not host:
+                if not host or (mode_filter is not None and mode != mode_filter):
                     continue
                 target_count += 1
-                target = CameraTarget(camera=camera, mode=mode, host=host, port=port)
-                url, safe_url = build_rtsp_url(camera, target)
+                matched_targets += 1
+                runtime_camera = replace(camera, subtype=subtype_override or camera.subtype)
+                target = CameraTarget(camera=runtime_camera, mode=mode, host=host, port=port)
+                url, safe_url = build_rtsp_url(runtime_camera, target)
                 preview_url = url if self.show_passwords_checkbox.isChecked() else safe_url
                 preview_lines.append(f"- {mode}: {host}:{port}")
                 preview_lines.append(f"  rtsp: {preview_url}")
@@ -50,14 +61,14 @@ class ControlPanelActionsMixin:
                 raw_lines.append("- no stream target configured")
             preview_blocks.append("\n".join(preview_lines))
             raw_blocks.append("\n".join(raw_lines))
-        return "\n\n".join(preview_blocks), "\n\n".join(raw_blocks)
+        return "\n\n".join(preview_blocks), "\n\n".join(raw_blocks), matched_targets
 
     def show_selected_stream_urls(self) -> None:
         camera_ids = self.selected_camera_ids()
         if not camera_ids:
             QMessageBox.warning(self, WINDOW_TITLE, "Please select one or more cameras first.")
             return
-        preview_text, _raw_text = self._build_stream_export_text(camera_ids)
+        preview_text, _raw_text, _matched_targets = self._build_stream_export_text(camera_ids)
         self.append_output("[INFO] Stream URLs for external apps:")
         self.append_output(preview_text)
         if not self.show_passwords_checkbox.isChecked():
@@ -65,14 +76,37 @@ class ControlPanelActionsMixin:
         self._set_status(f"Displayed stream URLs for {len(camera_ids)} camera(s)")
 
     def copy_selected_stream_urls(self) -> None:
+        self._copy_selected_stream_urls(description="stream URLs")
+
+    def copy_selected_public_substream_urls(self) -> None:
+        self._copy_selected_stream_urls(mode_filter="public", subtype_override="1", description="public substream RTSP URLs")
+
+    def copy_selected_ddns_substream_urls(self) -> None:
+        self._copy_selected_stream_urls(mode_filter="ddns", subtype_override="1", description="DDNS substream RTSP URLs")
+
+    def _copy_selected_stream_urls(
+        self,
+        *,
+        mode_filter: str | None = None,
+        subtype_override: str | None = None,
+        description: str,
+    ) -> None:
         camera_ids = self.selected_camera_ids()
         if not camera_ids:
             QMessageBox.warning(self, WINDOW_TITLE, "Please select one or more cameras first.")
             return
-        _preview_text, raw_text = self._build_stream_export_text(camera_ids)
+        _preview_text, raw_text, matched_targets = self._build_stream_export_text(
+            camera_ids,
+            mode_filter=mode_filter,
+            subtype_override=subtype_override,
+        )
+        if matched_targets == 0:
+            target_label = mode_filter.upper() if mode_filter else "requested"
+            QMessageBox.information(self, WINDOW_TITLE, f"No {target_label} stream targets are configured for the current selection.")
+            return
         QApplication.clipboard().setText(raw_text)
-        self.append_output(f"[INFO] Copied stream URLs for {len(camera_ids)} camera(s) to clipboard")
-        self._set_status(f"Copied stream URLs for {len(camera_ids)} camera(s)")
+        self.append_output(f"[INFO] Copied {description} for {len(camera_ids)} camera(s) to clipboard")
+        self._set_status(f"Copied {description} for {len(camera_ids)} camera(s)")
 
     def _prompt_unsaved_inventory_decision(self, action_label: str) -> str:
         dialog = QMessageBox(self)

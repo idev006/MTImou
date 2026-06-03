@@ -221,6 +221,7 @@ The control panel now lets the operator:
 - filter cameras by group and tier
 - search large inventories
 - display or copy LAN / DDNS / public RTSP targets for the selected cameras so they can be pasted into other tools
+- copy remote-friendly `DDNS` or `public` substream RTSP URLs directly when VLC or other external tools need a lighter stream
 - save and reuse selection presets
 - add preset description and default launch mode
 - launch `critical` tier cameras directly
