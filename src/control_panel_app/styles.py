@@ -429,6 +429,10 @@ def build_stylesheet(compact: bool) -> str:
                 min-height: {metrics["input_height"]};
                 padding: 2px 6px;
             }}
+            QComboBox QAbstractItemView::item:hover {{
+                background: #eef6ff;
+                color: #172233;
+            }}
             QComboBox QAbstractItemView::item:selected {{
                 background: #dbeafe;
                 color: #172233;
