@@ -222,6 +222,9 @@ def build_stylesheet(compact: bool) -> str:
         "button_radius": "7px" if compact else "9px",
         "button_padding": "2px 7px" if compact else "5px 10px",
         "button_font_size": "12px" if compact else "13px",
+        "input_height": "24px" if compact else "30px",
+        "input_padding": "1px 6px" if compact else "3px 8px",
+        "input_font_size": "12px" if compact else "13px",
         "input_radius": "8px" if compact else "10px",
         "header_padding": "6px" if compact else "8px",
         "table_item_padding": "2px 4px" if compact else "4px 6px",
@@ -375,6 +378,12 @@ def build_stylesheet(compact: bool) -> str:
                 border-radius: {metrics["input_radius"]};
                 background: #ffffff;
                 selection-background-color: #dbeafe;
+            }}
+            QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox {{
+                min-height: {metrics["input_height"]};
+                max-height: {metrics["input_height"]};
+                padding: {metrics["input_padding"]};
+                font-size: {metrics["input_font_size"]};
             }}
             QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTableWidget:focus, QDoubleSpinBox:focus, QSpinBox:focus {{
                 border: 1px solid #2374e1;
