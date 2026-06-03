@@ -387,12 +387,11 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         self.settings_tab = tab
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(14)
+        layout.setSpacing(10)
 
         settings_body = QWidget()
         settings_layout = QFormLayout(settings_body)
-        settings_layout.setContentsMargins(16, 18, 16, 16)
-        settings_layout.setSpacing(12)
+        self._configure_settings_form(settings_layout)
         settings_layout.addRow("Target mode", self.mode_combo)
         settings_layout.addRow("Shared DDNS host", self.ddns_edit)
         settings_layout.addRow("Camera username", self.user_edit)
@@ -404,8 +403,7 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
 
         display_body = QWidget()
         display_layout = QFormLayout(display_body)
-        display_layout.setContentsMargins(16, 18, 16, 16)
-        display_layout.setSpacing(12)
+        self._configure_settings_form(display_layout)
 
         overlay_matrix = self._build_overlay_scale_matrix()
 
@@ -430,6 +428,8 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
 
         notes_body = QWidget()
         notes_layout = QVBoxLayout(notes_body)
+        notes_layout.setContentsMargins(0, 0, 0, 0)
+        notes_layout.setSpacing(0)
         notes = QLabel(
             "Auto mode is the normal choice. It prefers LAN when you are at home, then DDNS, then public IP.\n\n"
             "Use DDNS mode when you want to verify remote access specifically.\n\n"
@@ -730,6 +730,12 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         spin.setFixedWidth(92)
         spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         return spin
+
+    def _configure_settings_form(self, form: QFormLayout) -> None:
+        form.setContentsMargins(12, 12, 12, 10)
+        form.setHorizontalSpacing(10)
+        form.setVerticalSpacing(8)
+        form.setSpacing(8)
 
     def _build_overlay_scale_matrix(self) -> QWidget:
         matrix = QWidget()
