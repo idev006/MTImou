@@ -416,6 +416,23 @@ def build_stylesheet(compact: bool) -> str:
                 width: 8px;
                 height: 5px;
             }}
+            QComboBox QAbstractItemView {{
+                border: 1px solid #d0d9e7;
+                background: #ffffff;
+                color: #172233;
+                selection-background-color: #dbeafe;
+                selection-color: #172233;
+                outline: 0;
+                padding: 2px;
+            }}
+            QComboBox QAbstractItemView::item {{
+                min-height: {metrics["input_height"]};
+                padding: 2px 6px;
+            }}
+            QComboBox QAbstractItemView::item:selected {{
+                background: #dbeafe;
+                color: #172233;
+            }}
             QDoubleSpinBox, QSpinBox {{
                 min-height: {metrics["spin_height"]};
                 max-height: {metrics["spin_height"]};
