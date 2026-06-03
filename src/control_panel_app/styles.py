@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from PySide6.QtGui import QColor, QPalette
+
 
 DEFAULT_COMPACT_UI = True
 
@@ -56,6 +58,48 @@ COMPACT_UI_PROFILE = UiProfile(
 
 def get_ui_profile(compact: bool) -> UiProfile:
     return COMPACT_UI_PROFILE if compact else STANDARD_UI_PROFILE
+
+
+def build_app_palette() -> QPalette:
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor("#f4f7fb"))
+    palette.setColor(QPalette.WindowText, QColor("#172233"))
+    palette.setColor(QPalette.Base, QColor("#ffffff"))
+    palette.setColor(QPalette.AlternateBase, QColor("#eef3f9"))
+    palette.setColor(QPalette.ToolTipBase, QColor("#ffffff"))
+    palette.setColor(QPalette.ToolTipText, QColor("#172233"))
+    palette.setColor(QPalette.Text, QColor("#172233"))
+    palette.setColor(QPalette.Button, QColor("#ffffff"))
+    palette.setColor(QPalette.ButtonText, QColor("#172233"))
+    palette.setColor(QPalette.BrightText, QColor("#ffffff"))
+    palette.setColor(QPalette.Highlight, QColor("#2374e1"))
+    palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+    palette.setColor(QPalette.Link, QColor("#2374e1"))
+    palette.setColor(QPalette.PlaceholderText, QColor("#6b7280"))
+    return palette
+
+
+def build_app_chrome_stylesheet() -> str:
+    return """
+            QWidget {
+                color: #172233;
+            }
+            QDialog, QMessageBox {
+                background: #f4f7fb;
+            }
+            QMessageBox QLabel {
+                color: #172233;
+            }
+            QMenu {
+                background: #ffffff;
+                color: #172233;
+                border: 1px solid #d0d9e7;
+            }
+            QMenu::item:selected {
+                background: #dbeafe;
+                color: #172233;
+            }
+            """
 
 
 def build_stylesheet(compact: bool) -> str:
