@@ -36,6 +36,7 @@ from control_panel_app.actions_mixin import ControlPanelActionsMixin
 from control_panel_app.components import CollapsibleSection, FirstRunGuideDialog, MetricCard
 from control_panel_app.constants import ENV_PATH, INVENTORY_COLUMNS, MODE_OPTIONS, ROOT_DIR, TABLE_COLUMNS, TIER_OPTIONS, WINDOW_TITLE
 from control_panel_app.state_mixin import ControlPanelStateMixin
+from control_panel_app.styles import DEFAULT_COMPACT_UI, build_stylesheet, get_ui_profile
 from mtimou_v2.viewmodels.control_panel_vm import ControlPanelViewModel
 
 
@@ -44,11 +45,12 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
 
     def __init__(self) -> None:
         super().__init__()
+        self.ui_settings = QSettings("MTImou", "ControlPanel")
+        self._compact_ui_was_configured = self.ui_settings.contains("ui/compact")
+        self.compact_ui_enabled = self._load_compact_ui_preference()
+        self._apply_window_profile_defaults()
         self.setWindowTitle(WINDOW_TITLE)
         self.setWindowModified(False)
-        self.resize(1360, 860)
-        self.setMinimumSize(860, 620)
-        self.ui_settings = QSettings("MTImou", "ControlPanel")
 
         self.vm = ControlPanelViewModel(root_dir=ROOT_DIR, env_path=ENV_PATH)
         self.health_process: QProcess | None = None
@@ -66,6 +68,8 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         self.multi_title_scale_spin = self._create_overlay_spinbox()
         self.multi_meta_scale_spin = self._create_overlay_spinbox()
         self.multi_small_scale_spin = self._create_overlay_spinbox()
+        self.compact_ui_checkbox = QCheckBox("Use compact UI layout")
+        self.compact_ui_checkbox.toggled.connect(self._toggle_compact_ui)
         self.show_passwords_checkbox = QCheckBox("Show passwords")
         self.show_passwords_checkbox.toggled.connect(self.toggle_password_visibility)
         self.open_log_checkbox = QCheckBox("Open logs folder after health check")
@@ -140,135 +144,12 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         self.reload_settings()
         self._refresh_group_filter()
         self._restore_ui_state()
+        self._apply_compact_ui(self.compact_ui_enabled, persist=not self._compact_ui_was_configured, shrink_to_default=not self._compact_ui_was_configured)
         self._update_dashboard_breakpoint()
         QTimer.singleShot(0, self._maybe_show_first_run_guidance)
 
     def _apply_styles(self) -> None:
-        self.setStyleSheet(
-            """
-            QMainWindow {
-                background: #f4f7fb;
-            }
-            QToolBar {
-                spacing: 8px;
-                padding: 6px;
-                background: #ffffff;
-                border-bottom: 1px solid #d9e2ef;
-            }
-            QGroupBox {
-                font-weight: 600;
-                border: 1px solid #d9e2ef;
-                border-radius: 12px;
-                margin-top: 12px;
-                background: #ffffff;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 6px;
-            }
-            QFrame#metricCard {
-                border-radius: 14px;
-                border: 1px solid #d9e2ef;
-                background: #ffffff;
-            }
-            QFrame#collapsibleSection {
-                border: 1px solid #d9e2ef;
-                border-radius: 12px;
-                background: #ffffff;
-                padding: 4px 8px 8px 8px;
-            }
-            QFrame[accent="green"] {
-                border-left: 5px solid #1f9d64;
-            }
-            QFrame[accent="blue"] {
-                border-left: 5px solid #2374e1;
-            }
-            QFrame[accent="orange"] {
-                border-left: 5px solid #d97706;
-            }
-            QLabel#metricTitle {
-                color: #5b6472;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QLabel#metricValue {
-                color: #172233;
-                font-size: 22px;
-                font-weight: 700;
-            }
-            QLabel#metricHelper {
-                color: #6b7280;
-                font-size: 11px;
-            }
-            QLabel#selectionSummary {
-                color: #334155;
-                background: #f8fafc;
-                border: 1px solid #d9e2ef;
-                border-radius: 10px;
-                padding: 10px 12px;
-            }
-            QToolButton {
-                border: 0;
-                font-weight: 700;
-                color: #172233;
-                background: transparent;
-                text-align: left;
-                padding: 6px 2px;
-            }
-            QTabWidget::pane {
-                border: 1px solid #d9e2ef;
-                background: #ffffff;
-                border-radius: 12px;
-                top: -1px;
-            }
-            QTabBar::tab {
-                background: #e9eef6;
-                color: #334155;
-                padding: 10px 18px;
-                margin-right: 4px;
-                border-top-left-radius: 10px;
-                border-top-right-radius: 10px;
-            }
-            QTabBar::tab:selected {
-                background: #ffffff;
-                font-weight: 700;
-            }
-            QPushButton {
-                min-height: 40px;
-                border-radius: 10px;
-                border: 1px solid #d0d9e7;
-                background: #ffffff;
-                padding: 8px 12px;
-            }
-            QPushButton:hover {
-                background: #f8fbff;
-                border-color: #98b4df;
-            }
-            QPushButton#primary {
-                background: #2374e1;
-                color: white;
-                border-color: #2374e1;
-                font-weight: 700;
-            }
-            QPushButton#primary:hover {
-                background: #1b63c4;
-            }
-            QLineEdit, QComboBox, QPlainTextEdit, QTableWidget {
-                border: 1px solid #d0d9e7;
-                border-radius: 10px;
-                background: #ffffff;
-                selection-background-color: #dbeafe;
-            }
-            QHeaderView::section {
-                background: #eef3f9;
-                border: 0;
-                border-bottom: 1px solid #d0d9e7;
-                padding: 8px;
-                font-weight: 700;
-            }
-            """
-        )
+        self.setStyleSheet(build_stylesheet(self.compact_ui_enabled))
 
     def _build_ui(self) -> None:
         self._build_toolbar()
@@ -279,11 +160,11 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         root_layout.setSpacing(14)
 
         title = QLabel("MTImou Control Panel")
-        title.setStyleSheet("font-size: 30px; font-weight: 800; color: #172233;")
+        title.setObjectName("appTitle")
         subtitle = QLabel(
             "Operate cameras from one place: choose the safest route, verify system health, and launch single or multi-camera views."
         )
-        subtitle.setStyleSheet("color: #536173; font-size: 13px;")
+        subtitle.setObjectName("appSubtitle")
         root_layout.addWidget(title)
         root_layout.addWidget(subtitle)
 
@@ -365,7 +246,7 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
 
     def _build_dashboard_tab(self) -> QWidget:
         tab = QWidget()
-        tab.setMinimumSize(980, 920)
+        self.dashboard_tab = tab
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
@@ -502,7 +383,7 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
 
     def _build_settings_tab(self) -> QWidget:
         tab = QWidget()
-        tab.setMinimumSize(980, 760)
+        self.settings_tab = tab
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
@@ -552,6 +433,7 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
 
         display_layout.addRow("Single / High-FPS", single_row)
         display_layout.addRow("Multi-camera wall", multi_row)
+        display_layout.addRow("Window layout", self.compact_ui_checkbox)
         display_layout.addRow("", restore_defaults_button)
 
         display_notes = QLabel(
@@ -586,7 +468,7 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
 
     def _build_camera_management_tab(self) -> QWidget:
         tab = QWidget()
-        tab.setMinimumSize(1180, 860)
+        self.inventory_tab = tab
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
@@ -684,7 +566,7 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
 
     def _build_help_tab(self) -> QWidget:
         tab = QWidget()
-        tab.setMinimumSize(900, 720)
+        self.help_tab = tab
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
@@ -732,14 +614,15 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
     def _update_dashboard_breakpoint(self) -> None:
         if not hasattr(self, "dashboard_splitter"):
             return
+        profile = get_ui_profile(self.compact_ui_enabled)
         target_orientation = Qt.Vertical if self.width() < self.DASHBOARD_BREAKPOINT else Qt.Horizontal
         if self.dashboard_splitter.orientation() == target_orientation:
             return
         self.dashboard_splitter.setOrientation(target_orientation)
         if target_orientation == Qt.Vertical:
-            self.dashboard_splitter.setSizes([620, 340])
+            self.dashboard_splitter.setSizes(list(profile.dashboard_main_sizes_vertical))
         else:
-            self.dashboard_splitter.setSizes([900, 460])
+            self.dashboard_splitter.setSizes(list(profile.dashboard_main_sizes_horizontal))
 
     def _maybe_show_first_run_guidance(self) -> None:
         issues = self._collect_first_run_issues()
@@ -795,6 +678,43 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
             sizes = [int(part) for part in side_sizes_raw.split(",") if part.strip().isdigit()]
             if sizes:
                 self.dashboard_side_splitter.setSizes(sizes)
+
+    def _load_compact_ui_preference(self) -> bool:
+        return str(self.ui_settings.value("ui/compact", str(DEFAULT_COMPACT_UI))).lower() == "true"
+
+    def _apply_window_profile_defaults(self) -> None:
+        profile = get_ui_profile(self.compact_ui_enabled)
+        self.DASHBOARD_BREAKPOINT = profile.dashboard_breakpoint
+        self.resize(profile.default_width, profile.default_height)
+        self.setMinimumSize(profile.min_width, profile.min_height)
+
+    def _apply_compact_ui(self, enabled: bool, *, persist: bool, shrink_to_default: bool) -> None:
+        self.compact_ui_enabled = enabled
+        profile = get_ui_profile(enabled)
+        self.DASHBOARD_BREAKPOINT = profile.dashboard_breakpoint
+        self.setMinimumSize(profile.min_width, profile.min_height)
+        self.setStyleSheet(build_stylesheet(enabled))
+        self.compact_ui_checkbox.blockSignals(True)
+        self.compact_ui_checkbox.setChecked(enabled)
+        self.compact_ui_checkbox.blockSignals(False)
+        self.camera_table.verticalHeader().setDefaultSectionSize(28 if enabled else 34)
+        self.inventory_table.verticalHeader().setDefaultSectionSize(28 if enabled else 34)
+        self.dashboard_tab.setMinimumSize(*profile.dashboard_tab_min)
+        self.settings_tab.setMinimumSize(*profile.settings_tab_min)
+        self.inventory_tab.setMinimumSize(*profile.inventory_tab_min)
+        self.help_tab.setMinimumSize(*profile.help_tab_min)
+        main_sizes = profile.dashboard_main_sizes_vertical if self.dashboard_splitter.orientation() == Qt.Vertical else profile.dashboard_main_sizes_horizontal
+        self.dashboard_splitter.setSizes(list(main_sizes))
+        self.dashboard_side_splitter.setSizes(list(profile.dashboard_side_sizes))
+        if shrink_to_default:
+            self.resize(max(self.minimumWidth(), min(self.width(), profile.default_width)), max(self.minimumHeight(), min(self.height(), profile.default_height)))
+        self._update_dashboard_breakpoint()
+        if persist:
+            self.ui_settings.setValue("ui/compact", enabled)
+            self.ui_settings.sync()
+
+    def _toggle_compact_ui(self, enabled: bool) -> None:
+        self._apply_compact_ui(enabled, persist=True, shrink_to_default=True)
 
     def _save_ui_state(self) -> None:
         self.ui_settings.setValue("window/geometry", self.saveGeometry())
