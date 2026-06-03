@@ -101,10 +101,41 @@ def build_app_chrome_stylesheet() -> str:
                 background: #f8fbff;
                 border-color: #98b4df;
             }
+            QPushButton:disabled,
+            QMessageBox QPushButton:disabled,
+            QDialog QPushButton:disabled {
+                color: #94a3b8;
+                background: #f1f5f9;
+                border-color: #d9e2ef;
+            }
             QLineEdit, QComboBox, QPlainTextEdit, QTableWidget, QDoubleSpinBox, QSpinBox {
                 color: #172233;
                 background: #ffffff;
                 selection-background-color: #dbeafe;
+            }
+            QLineEdit:disabled,
+            QComboBox:disabled,
+            QPlainTextEdit:disabled,
+            QTableWidget:disabled,
+            QDoubleSpinBox:disabled,
+            QSpinBox:disabled {
+                color: #94a3b8;
+                background: #f8fafc;
+            }
+            QTableView::item:selected,
+            QTableWidget::item:selected {
+                background: #dbeafe;
+                color: #172233;
+            }
+            QTableView::item:selected:active,
+            QTableWidget::item:selected:active {
+                background: #bfdbfe;
+                color: #172233;
+            }
+            QTableView::item:selected:!active,
+            QTableWidget::item:selected:!active {
+                background: #e2e8f0;
+                color: #334155;
             }
             QHeaderView::section,
             QTableCornerButton::section {
@@ -280,6 +311,11 @@ def build_stylesheet(compact: bool) -> str:
                 background: #f8fbff;
                 border-color: #98b4df;
             }}
+            QPushButton:disabled {{
+                color: #94a3b8;
+                background: #f1f5f9;
+                border-color: #d9e2ef;
+            }}
             QPushButton#primary {{
                 background: #2374e1;
                 color: white;
@@ -289,14 +325,34 @@ def build_stylesheet(compact: bool) -> str:
             QPushButton#primary:hover {{
                 background: #1b63c4;
             }}
+            QPushButton#primary:disabled {{
+                color: #e2e8f0;
+                background: #93c5fd;
+                border-color: #93c5fd;
+            }}
             QLineEdit, QComboBox, QPlainTextEdit, QTableWidget, QDoubleSpinBox, QSpinBox {{
                 border: 1px solid #d0d9e7;
                 border-radius: {metrics["input_radius"]};
                 background: #ffffff;
                 selection-background-color: #dbeafe;
             }}
+            QLineEdit:disabled, QComboBox:disabled, QPlainTextEdit:disabled, QTableWidget:disabled, QDoubleSpinBox:disabled, QSpinBox:disabled {{
+                color: #94a3b8;
+                background: #f8fafc;
+            }}
             QTableView::item {{
                 padding: {metrics["table_item_padding"]};
+            }}
+            QTableView::item:selected, QTableWidget::item:selected {{
+                background: #dbeafe;
+                color: #172233;
+            }}
+            QTableView::item:selected:active, QTableWidget::item:selected:active {{
+                background: #bfdbfe;
+            }}
+            QTableView::item:selected:!active, QTableWidget::item:selected:!active {{
+                background: #e2e8f0;
+                color: #334155;
             }}
             QHeaderView::section {{
                 background: #eef3f9;
