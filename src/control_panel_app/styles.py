@@ -387,11 +387,34 @@ def build_stylesheet(compact: bool) -> str:
                 selection-color: #172233;
                 color: #172233;
             }}
-            QLineEdit, QComboBox {{
+            QLineEdit {{
                 min-height: {metrics["input_height"]};
                 max-height: {metrics["input_height"]};
                 padding: {metrics["input_padding"]};
                 font-size: {metrics["input_font_size"]};
+            }}
+            QComboBox {{
+                min-height: {metrics["input_height"]};
+                max-height: {metrics["input_height"]};
+                padding: 1px 22px 1px 6px;
+                font-size: {metrics["input_font_size"]};
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: {metrics["spin_button_width"]};
+                background: #f8fafc;
+                border-left: 1px solid #d0d9e7;
+                border-top-right-radius: {metrics["input_radius"]};
+                border-bottom-right-radius: {metrics["input_radius"]};
+            }}
+            QComboBox::drop-down:hover {{
+                background: #eef6ff;
+            }}
+            QComboBox::down-arrow {{
+                image: url({SPIN_DOWN_ARROW});
+                width: 8px;
+                height: 5px;
             }}
             QDoubleSpinBox, QSpinBox {{
                 min-height: {metrics["spin_height"]};
