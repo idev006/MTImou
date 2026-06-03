@@ -54,6 +54,7 @@ run_resilience_smoke.bat cam1 cam2
 run_source_capability_check.bat cam1 cam2
 run_performance_benchmark.bat cam1 cam2
 run_doctor.bat
+run_control_panel_smoke_audit.bat
 ```
 
 ## 3. Production vs Legacy

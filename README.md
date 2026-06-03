@@ -99,6 +99,13 @@ cd /d F:\programming\python\MTImou
 run_source_capability_check.bat cam1 cam2
 ```
 
+Control-panel smoke audit:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_control_panel_smoke_audit.bat
+```
+
 Grid behavior:
 
 - `1 camera` -> `1x1`
