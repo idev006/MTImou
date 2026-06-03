@@ -406,27 +406,16 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         display_layout.setContentsMargins(16, 18, 16, 16)
         display_layout.setSpacing(12)
 
-        single_row = QWidget()
-        single_row_layout = QHBoxLayout(single_row)
-        single_row_layout.setContentsMargins(0, 0, 0, 0)
-        single_row_layout.setSpacing(8)
-        single_row_layout.addWidget(QLabel("Title"))
-        single_row_layout.addWidget(self.single_title_scale_spin)
-        single_row_layout.addWidget(QLabel("Meta"))
-        single_row_layout.addWidget(self.single_meta_scale_spin)
-        single_row_layout.addWidget(QLabel("Small"))
-        single_row_layout.addWidget(self.single_small_scale_spin)
-
-        multi_row = QWidget()
-        multi_row_layout = QHBoxLayout(multi_row)
-        multi_row_layout.setContentsMargins(0, 0, 0, 0)
-        multi_row_layout.setSpacing(8)
-        multi_row_layout.addWidget(QLabel("Title"))
-        multi_row_layout.addWidget(self.multi_title_scale_spin)
-        multi_row_layout.addWidget(QLabel("Meta"))
-        multi_row_layout.addWidget(self.multi_meta_scale_spin)
-        multi_row_layout.addWidget(QLabel("Small"))
-        multi_row_layout.addWidget(self.multi_small_scale_spin)
+        single_row = self._build_overlay_scale_row(
+            ("Title", self.single_title_scale_spin),
+            ("Meta", self.single_meta_scale_spin),
+            ("Small", self.single_small_scale_spin),
+        )
+        multi_row = self._build_overlay_scale_row(
+            ("Title", self.multi_title_scale_spin),
+            ("Meta", self.multi_meta_scale_spin),
+            ("Small", self.multi_small_scale_spin),
+        )
 
         restore_defaults_button = QPushButton("Restore Display Defaults")
         restore_defaults_button.clicked.connect(self.restore_overlay_defaults)
@@ -746,8 +735,28 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         spin.setRange(0.30, 2.00)
         spin.setDecimals(2)
         spin.setSingleStep(0.02)
-        spin.setMinimumWidth(80)
+        spin.setAlignment(Qt.AlignRight)
+        spin.setFixedWidth(92)
+        spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         return spin
+
+    def _build_overlay_scale_row(self, *items: tuple[str, QDoubleSpinBox]) -> QWidget:
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(10)
+        for label_text, spinbox in items:
+            group = QWidget()
+            group_layout = QHBoxLayout(group)
+            group_layout.setContentsMargins(0, 0, 0, 0)
+            group_layout.setSpacing(6)
+            label = QLabel(label_text)
+            label.setMinimumWidth(36)
+            group_layout.addWidget(label)
+            group_layout.addWidget(spinbox)
+            row_layout.addWidget(group, 0)
+        row_layout.addStretch(1)
+        return row
 
     def _set_inventory_dirty(self, dirty: bool, *, reason: str = "") -> None:
         self.inventory_dirty = dirty
