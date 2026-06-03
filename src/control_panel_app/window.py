@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QGroupBox,
     QHeaderView,
     QHBoxLayout,
@@ -406,22 +407,12 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         display_layout.setContentsMargins(16, 18, 16, 16)
         display_layout.setSpacing(12)
 
-        single_row = self._build_overlay_scale_row(
-            ("Title", self.single_title_scale_spin),
-            ("Meta", self.single_meta_scale_spin),
-            ("Small", self.single_small_scale_spin),
-        )
-        multi_row = self._build_overlay_scale_row(
-            ("Title", self.multi_title_scale_spin),
-            ("Meta", self.multi_meta_scale_spin),
-            ("Small", self.multi_small_scale_spin),
-        )
+        overlay_matrix = self._build_overlay_scale_matrix()
 
         restore_defaults_button = QPushButton("Restore Display Defaults")
         restore_defaults_button.clicked.connect(self.restore_overlay_defaults)
 
-        display_layout.addRow("Single / High-FPS", single_row)
-        display_layout.addRow("Multi-camera wall", multi_row)
+        display_layout.addRow("Overlay scales", overlay_matrix)
         display_layout.addRow("Window layout", self.compact_ui_checkbox)
         display_layout.addRow("", restore_defaults_button)
 
@@ -740,23 +731,30 @@ class ControlPanelWindow(ControlPanelStateMixin, ControlPanelActionsMixin, QMain
         spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         return spin
 
-    def _build_overlay_scale_row(self, *items: tuple[str, QDoubleSpinBox]) -> QWidget:
-        row = QWidget()
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(10)
-        for label_text, spinbox in items:
-            group = QWidget()
-            group_layout = QHBoxLayout(group)
-            group_layout.setContentsMargins(0, 0, 0, 0)
-            group_layout.setSpacing(6)
-            label = QLabel(label_text)
-            label.setMinimumWidth(36)
-            group_layout.addWidget(label)
-            group_layout.addWidget(spinbox)
-            row_layout.addWidget(group, 0)
-        row_layout.addStretch(1)
-        return row
+    def _build_overlay_scale_matrix(self) -> QWidget:
+        matrix = QWidget()
+        grid = QGridLayout(matrix)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(8)
+
+        headers = ["", "Title", "Meta", "Small"]
+        for column, title in enumerate(headers):
+            header = QLabel(title)
+            if column == 0:
+                header.setMinimumWidth(124)
+            grid.addWidget(header, 0, column)
+
+        rows = [
+            ("Single / High-FPS", self.single_title_scale_spin, self.single_meta_scale_spin, self.single_small_scale_spin),
+            ("Multi-camera wall", self.multi_title_scale_spin, self.multi_meta_scale_spin, self.multi_small_scale_spin),
+        ]
+        for row_index, row in enumerate(rows, start=1):
+            grid.addWidget(QLabel(row[0]), row_index, 0)
+            for column, spinbox in enumerate(row[1:], start=1):
+                grid.addWidget(spinbox, row_index, column)
+        grid.setColumnStretch(4, 1)
+        return matrix
 
     def _set_inventory_dirty(self, dirty: bool, *, reason: str = "") -> None:
         self.inventory_dirty = dirty
