@@ -77,9 +77,11 @@ def build_stylesheet(compact: bool) -> str:
         "selection_padding": "8px 10px" if compact else "10px 12px",
         "toolbutton_padding": "4px 2px" if compact else "6px 2px",
         "tab_padding": "7px 12px" if compact else "10px 18px",
-        "button_height": "34px" if compact else "40px",
-        "button_radius": "8px" if compact else "10px",
-        "button_padding": "6px 10px" if compact else "8px 12px",
+        "button_height": "26px" if compact else "34px",
+        "button_max_height": "26px" if compact else "34px",
+        "button_radius": "7px" if compact else "9px",
+        "button_padding": "2px 7px" if compact else "5px 10px",
+        "button_font_size": "12px" if compact else "13px",
         "input_radius": "8px" if compact else "10px",
         "header_padding": "6px" if compact else "8px",
         "table_item_padding": "2px 4px" if compact else "4px 6px",
@@ -184,10 +186,12 @@ def build_stylesheet(compact: bool) -> str:
             }}
             QPushButton {{
                 min-height: {metrics["button_height"]};
+                max-height: {metrics["button_max_height"]};
                 border-radius: {metrics["button_radius"]};
                 border: 1px solid #d0d9e7;
                 background: #ffffff;
                 padding: {metrics["button_padding"]};
+                font-size: {metrics["button_font_size"]};
             }}
             QPushButton:hover {{
                 background: #f8fbff;
