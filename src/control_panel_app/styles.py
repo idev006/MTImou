@@ -223,9 +223,11 @@ def build_stylesheet(compact: bool) -> str:
         "button_padding": "2px 7px" if compact else "5px 10px",
         "button_font_size": "12px" if compact else "13px",
         "input_height": "24px" if compact else "30px",
+        "spin_height": "30px" if compact else "34px",
         "input_padding": "1px 6px" if compact else "3px 8px",
         "input_font_size": "12px" if compact else "13px",
         "input_radius": "8px" if compact else "10px",
+        "spin_button_width": "18px" if compact else "20px",
         "header_padding": "6px" if compact else "8px",
         "table_item_padding": "2px 4px" if compact else "4px 6px",
     }
@@ -379,11 +381,25 @@ def build_stylesheet(compact: bool) -> str:
                 background: #ffffff;
                 selection-background-color: #dbeafe;
             }}
-            QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox {{
+            QLineEdit, QComboBox {{
                 min-height: {metrics["input_height"]};
                 max-height: {metrics["input_height"]};
                 padding: {metrics["input_padding"]};
                 font-size: {metrics["input_font_size"]};
+            }}
+            QDoubleSpinBox, QSpinBox {{
+                min-height: {metrics["spin_height"]};
+                max-height: {metrics["spin_height"]};
+                padding: 1px 22px 1px 6px;
+                font-size: {metrics["input_font_size"]};
+            }}
+            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button, QSpinBox::up-button, QSpinBox::down-button {{
+                width: {metrics["spin_button_width"]};
+                background: #f8fafc;
+                border-left: 1px solid #d0d9e7;
+            }}
+            QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover, QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+                background: #eef6ff;
             }}
             QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTableWidget:focus, QDoubleSpinBox:focus, QSpinBox:focus {{
                 border: 1px solid #2374e1;
