@@ -101,6 +101,23 @@ def build_app_chrome_stylesheet() -> str:
                 background: #f8fbff;
                 border-color: #98b4df;
             }
+            QPushButton:pressed,
+            QMessageBox QPushButton:pressed,
+            QDialog QPushButton:pressed {
+                background: #e0efff;
+                border-color: #2374e1;
+            }
+            QPushButton:focus,
+            QMessageBox QPushButton:focus,
+            QDialog QPushButton:focus,
+            QLineEdit:focus,
+            QComboBox:focus,
+            QPlainTextEdit:focus,
+            QTableWidget:focus,
+            QDoubleSpinBox:focus,
+            QSpinBox:focus {
+                border: 1px solid #2374e1;
+            }
             QPushButton:disabled,
             QMessageBox QPushButton:disabled,
             QDialog QPushButton:disabled {
@@ -156,6 +173,11 @@ def build_app_chrome_stylesheet() -> str:
                 background: #ffffff;
                 color: #172233;
             }
+            QTabBar::tab:selected:pressed,
+            QTabBar::tab:!selected:pressed {
+                background: #dbeafe;
+                color: #172233;
+            }
             QTabBar::tab:!selected {
                 background: #e9eef6;
                 color: #475569;
@@ -167,6 +189,10 @@ def build_app_chrome_stylesheet() -> str:
             }
             QMenu::item:selected {
                 background: #dbeafe;
+                color: #172233;
+            }
+            QMenu::item:pressed {
+                background: #bfdbfe;
                 color: #172233;
             }
             """
@@ -311,6 +337,13 @@ def build_stylesheet(compact: bool) -> str:
                 background: #f8fbff;
                 border-color: #98b4df;
             }}
+            QPushButton:pressed {{
+                background: #e0efff;
+                border-color: #2374e1;
+            }}
+            QPushButton:focus {{
+                border-color: #2374e1;
+            }}
             QPushButton:disabled {{
                 color: #94a3b8;
                 background: #f1f5f9;
@@ -325,6 +358,13 @@ def build_stylesheet(compact: bool) -> str:
             QPushButton#primary:hover {{
                 background: #1b63c4;
             }}
+            QPushButton#primary:pressed {{
+                background: #1553a6;
+                border-color: #1553a6;
+            }}
+            QPushButton#primary:focus {{
+                border-color: #93c5fd;
+            }}
             QPushButton#primary:disabled {{
                 color: #e2e8f0;
                 background: #93c5fd;
@@ -335,6 +375,9 @@ def build_stylesheet(compact: bool) -> str:
                 border-radius: {metrics["input_radius"]};
                 background: #ffffff;
                 selection-background-color: #dbeafe;
+            }}
+            QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTableWidget:focus, QDoubleSpinBox:focus, QSpinBox:focus {{
+                border: 1px solid #2374e1;
             }}
             QLineEdit:disabled, QComboBox:disabled, QPlainTextEdit:disabled, QTableWidget:disabled, QDoubleSpinBox:disabled, QSpinBox:disabled {{
                 color: #94a3b8;
@@ -360,5 +403,9 @@ def build_stylesheet(compact: bool) -> str:
                 border-bottom: 1px solid #d0d9e7;
                 padding: {metrics["header_padding"]};
                 font-weight: 700;
+            }}
+            QTabBar::tab:pressed {{
+                background: #dbeafe;
+                color: #172233;
             }}
             """
