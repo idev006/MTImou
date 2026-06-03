@@ -154,15 +154,15 @@ run_multi_camera_stable.bat cam1 cam2
 
 ## FPS Tuning
 
-For remote multi-camera tiled viewing, the runtime now defaults to substream on `ddns/public`
-targets to improve FPS and reduce uplink pressure:
+For remote multi-camera tiled viewing, the runtime now defaults to main stream on `ddns/public`
+targets so wall views stay sharper by default:
 
-- `IMOU_REMOTE_MULTI_SUBTYPE=1` (default)
+- `IMOU_REMOTE_MULTI_SUBTYPE=0` (default)
 
 Useful overrides:
 
 ```bat
-set IMOU_REMOTE_MULTI_SUBTYPE=1
+set IMOU_REMOTE_MULTI_SUBTYPE=0
 set IMOU_REMOTE_SINGLE_SUBTYPE=0
 ```
 
@@ -188,7 +188,8 @@ This is the recommended way to change overlay text size now. Manual env editing 
 
 Notes:
 
-- Multi-camera remote viewing usually performs better with `subtype=1`
+- Multi-camera remote viewing now defaults to `subtype=0` for better detail
+- If a remote wall view needs more smoothness or lower bandwidth, change that camera or environment to `subtype=1`
 - Single-camera remote viewing can stay on `subtype=0` for higher detail
 - Multi-camera viewing now uses parallel camera readers so one stream no longer drags the other down as much
 - `run_multi_camera_high_fps.bat` now defaults to main stream (`subtype=0`) so it does not artificially cap source FPS
@@ -208,7 +209,7 @@ Recommended operating pattern for large `N`:
 
 - wall view:
   - group-based or all-enabled
-  - `remote_wall_subtype=1`
+  - `remote_wall_subtype=0`
 - focus view:
   - selected cameras only
   - `remote_focus_subtype=0`

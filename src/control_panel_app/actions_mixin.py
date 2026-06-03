@@ -166,7 +166,7 @@ class ControlPanelActionsMixin:
             channel="1",
             subtype="0",
             transport="tcp",
-            remote_wall_subtype=str(payload["remote_wall_subtype"]) or "1",
+            remote_wall_subtype=str(payload["remote_wall_subtype"]) or "0",
             remote_focus_subtype=str(payload["remote_focus_subtype"]) or "0",
             enabled=bool(payload["enabled"]),
             username_env="IMOU_CAMERA_USERNAME",

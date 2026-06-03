@@ -130,7 +130,7 @@ class CameraWizardDialog(QDialog):
         self.public_port_spin.setValue(public_port)
         self.password_env_edit = QLineEdit(f"IMOU_CAM_{re.sub(r'[^A-Za-z0-9]+', '_', next_camera_id).upper()}_PASSWORD")
         self.wall_subtype_combo = QComboBox()
-        self.wall_subtype_combo.addItems(["1", "0"])
+        self.wall_subtype_combo.addItems(["0", "1"])
         self.focus_subtype_combo = QComboBox()
         self.focus_subtype_combo.addItems(["0", "1"])
         self.enabled_check = QCheckBox("Enable this camera immediately")
@@ -153,7 +153,7 @@ class CameraWizardDialog(QDialog):
         form.addRow("", self.enabled_check)
 
         helper = QLabel(
-            "Recommended pattern: keep LAN port at 554, use one unique forwarded public port per camera, and map one password env per camera."
+            "Recommended pattern: keep LAN port at 554, use one unique forwarded public port per camera, map one password env per camera, and keep Wall Subtype at 0 when image detail matters most."
         )
         helper.setWordWrap(True)
         helper.setStyleSheet("color: #5b6472;")

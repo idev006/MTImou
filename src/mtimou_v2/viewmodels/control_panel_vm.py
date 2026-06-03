@@ -122,7 +122,7 @@ class ControlPanelViewModel:
             channel="1",
             subtype="0",
             transport="tcp",
-            remote_wall_subtype="1",
+            remote_wall_subtype="0",
             remote_focus_subtype="0",
             enabled=True,
             username_env="IMOU_CAMERA_USERNAME",

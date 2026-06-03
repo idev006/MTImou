@@ -15,7 +15,7 @@ def viewer_runtime_settings(*, log_path: Path, window_name: str) -> ViewerRuntim
         first_frame_timeout_sec=parse_env_float("IMOU_DIRECT_FIRST_FRAME_TIMEOUT_SEC", 6.0),
         target_probe_timeout_sec=parse_env_float("IMOU_TARGET_PROBE_TIMEOUT_SEC", 1.2),
         preferred_mode=os.getenv("IMOU_TARGET_MODE", "auto").strip().lower(),
-        remote_multi_subtype=os.getenv("IMOU_REMOTE_MULTI_SUBTYPE", "1").strip(),
+        remote_multi_subtype=os.getenv("IMOU_REMOTE_MULTI_SUBTYPE", "0").strip(),
         remote_single_subtype=os.getenv("IMOU_REMOTE_SINGLE_SUBTYPE", "").strip(),
         wait_key_ms=max(1, parse_env_int("IMOU_VIEW_WAITKEY_MS", 1)),
         multi_tile_width=max(160, parse_env_int("IMOU_MULTI_TILE_WIDTH", 480)),

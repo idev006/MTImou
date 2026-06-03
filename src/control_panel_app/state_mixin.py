@@ -223,7 +223,7 @@ class ControlPanelStateMixin:
             channel="1",
             subtype="0",
             transport="tcp",
-            remote_wall_subtype=remote_wall_subtype or "1",
+            remote_wall_subtype=remote_wall_subtype or "0",
             remote_focus_subtype=remote_focus_subtype or "0",
             enabled=enabled_item.checkState() == Qt.Checked if enabled_item else True,
             username_env="IMOU_CAMERA_USERNAME",
