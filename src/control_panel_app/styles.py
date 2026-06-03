@@ -90,6 +90,45 @@ def build_app_chrome_stylesheet() -> str:
             QMessageBox QLabel {
                 color: #172233;
             }
+            QMessageBox QPushButton,
+            QDialog QPushButton {
+                color: #172233;
+                background: #ffffff;
+                border: 1px solid #d0d9e7;
+            }
+            QMessageBox QPushButton:hover,
+            QDialog QPushButton:hover {
+                background: #f8fbff;
+                border-color: #98b4df;
+            }
+            QLineEdit, QComboBox, QPlainTextEdit, QTableWidget, QDoubleSpinBox, QSpinBox {
+                color: #172233;
+                background: #ffffff;
+                selection-background-color: #dbeafe;
+            }
+            QHeaderView::section,
+            QTableCornerButton::section {
+                color: #172233;
+                background: #eef3f9;
+                border: 0;
+                border-bottom: 1px solid #d0d9e7;
+            }
+            QTabWidget::pane {
+                background: #ffffff;
+                border: 1px solid #d9e2ef;
+            }
+            QTabBar::tab {
+                background: #e9eef6;
+                color: #334155;
+            }
+            QTabBar::tab:selected {
+                background: #ffffff;
+                color: #172233;
+            }
+            QTabBar::tab:!selected {
+                background: #e9eef6;
+                color: #475569;
+            }
             QMenu {
                 background: #ffffff;
                 color: #172233;
