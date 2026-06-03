@@ -51,6 +51,7 @@ class ControlPanelViewModel:
             self.document = SettingsDocument(
                 lines=["@echo off", "REM Local operator settings for MTImou", ""],
                 values={},
+                encoding="ascii",
             )
         self.document = self.store.save_document(self.document, updates)
         self.state = self.store.load_state()[1]
@@ -175,6 +176,8 @@ class ControlPanelViewModel:
 
     def health_check_command(self) -> tuple[str, list[str], dict[str, str]]:
         process_env = {key: value for key, value in os.environ.items()}
+        process_env["PYTHONUTF8"] = "1"
+        process_env["PYTHONIOENCODING"] = "utf-8"
         return (
             str(self.root_dir / ".venv" / "Scripts" / "python.exe"),
             [str(self.root_dir / "src" / "system_health_check.py")],
@@ -183,6 +186,8 @@ class ControlPanelViewModel:
 
     def source_capability_command(self, camera_ids: list[str] | None = None) -> tuple[str, list[str], dict[str, str]]:
         process_env = {key: value for key, value in os.environ.items()}
+        process_env["PYTHONUTF8"] = "1"
+        process_env["PYTHONIOENCODING"] = "utf-8"
         arguments = [str(self.root_dir / "src" / "source_capability_check.py")]
         if camera_ids:
             arguments.extend(camera_ids)

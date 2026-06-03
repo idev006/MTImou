@@ -9,6 +9,7 @@ if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
 from mtimou_v2.performance import run_performance_benchmark
+from mtimou_v2.numeric_parsing import parse_env_float
 from venv_guard import enforce_venv_python
 
 
@@ -19,9 +20,9 @@ def main() -> int:
     enforce_venv_python()
     camera_ids = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
     mode = os.getenv("IMOU_PERF_MODE", "public")
-    duration_sec = float(os.getenv("IMOU_PERF_DURATION_SEC", "10"))
-    warmup_sec = float(os.getenv("IMOU_PERF_WARMUP_SEC", "2"))
-    min_fps = float(os.getenv("IMOU_PERF_MIN_FPS", "16"))
+    duration_sec = parse_env_float("IMOU_PERF_DURATION_SEC", 10.0)
+    warmup_sec = parse_env_float("IMOU_PERF_WARMUP_SEC", 2.0)
+    min_fps = parse_env_float("IMOU_PERF_MIN_FPS", 16.0)
     log_path = Path(os.getenv("IMOU_PERF_LOG_PATH", str(ROOT_DIR / "logs" / "performance_benchmark_latest.log")))
     return run_performance_benchmark(
         camera_ids=camera_ids or None,

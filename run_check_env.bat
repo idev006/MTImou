@@ -2,6 +2,7 @@
 setlocal EnableDelayedExpansion
 
 cd /d "%~dp0"
+call "%~dp0set_python_utf8_env.bat"
 
 if exist "camera.env.bat" (
   call "camera.env.bat"
@@ -73,4 +74,3 @@ if exist ".venv\Scripts\python.exe" (
 
 endlocal
 exit /b 0
-

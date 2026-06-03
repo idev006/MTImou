@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from mtimou_v2.models import CameraConfig, CameraTarget, StreamState, ViewerRuntimeSettings
+from mtimou_v2.numeric_parsing import parse_float_text, parse_int_text
 from mtimou_v2.rtsp import build_rtsp_url, open_capture
 from mtimou_v2.targets import pick_target
 
@@ -36,12 +37,12 @@ def overlay_style(*, single_view: bool = False) -> dict[str, float | int]:
         return os.getenv(f"{prefix}{name}", os.getenv(f"IMOU_OVERLAY_{name}", default))
 
     return {
-        "title_scale": float(env_value("TITLE_SCALE", default_title_scale)),
-        "meta_scale": float(env_value("META_SCALE", default_meta_scale)),
-        "small_scale": float(env_value("SMALL_SCALE", default_small_scale)),
-        "title_thickness": int(env_value("TITLE_THICKNESS", default_title_thickness)),
-        "meta_thickness": int(env_value("META_THICKNESS", default_meta_thickness)),
-        "small_thickness": int(env_value("SMALL_THICKNESS", default_small_thickness)),
+        "title_scale": parse_float_text(env_value("TITLE_SCALE", default_title_scale), float(default_title_scale)),
+        "meta_scale": parse_float_text(env_value("META_SCALE", default_meta_scale), float(default_meta_scale)),
+        "small_scale": parse_float_text(env_value("SMALL_SCALE", default_small_scale), float(default_small_scale)),
+        "title_thickness": parse_int_text(env_value("TITLE_THICKNESS", default_title_thickness), int(default_title_thickness)),
+        "meta_thickness": parse_int_text(env_value("META_THICKNESS", default_meta_thickness), int(default_meta_thickness)),
+        "small_thickness": parse_int_text(env_value("SMALL_THICKNESS", default_small_thickness), int(default_small_thickness)),
     }
 
 

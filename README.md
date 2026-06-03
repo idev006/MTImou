@@ -27,6 +27,7 @@ Multi-camera IMOU RTSP viewer for LAN and worldwide access, with automatic targe
 - Camera registry lives in [`cameras.json`](./cameras.json)
 - A generic starter inventory is available in [`cameras.example.json`](./cameras.example.json)
 - Starter selection presets are provided in [`camera_presets.example.json`](./camera_presets.example.json)
+- Launchers force UTF-8 Python I/O, and the settings store preserves the local `camera.env.bat` encoding so English and non-English Windows locales behave consistently
 
 ## Quick Start
 

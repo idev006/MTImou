@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from mtimou_v2.logging_utils import make_logger
+from mtimou_v2.text_encoding import decode_text_bytes
 from mtimou_v2.registry import enabled_cameras, get_camera
 from mtimou_v2.targets import pick_target
 from mtimou_v2.viewer_common import effective_camera_profile
@@ -62,11 +63,13 @@ def _probe_stream(ffprobe_path: Path, url: str, duration_sec: float) -> dict[str
         "default=nw=1",
         url,
     ]
-    cp = subprocess.run(cmd, capture_output=True, text=True, timeout=max(20, int(duration_sec) + 20))
+    cp = subprocess.run(cmd, capture_output=True, timeout=max(20, int(duration_sec) + 20))
     if cp.returncode != 0:
-        raise RuntimeError(cp.stderr.strip() or f"ffprobe failed with code {cp.returncode}")
+        stderr_text = decode_text_bytes(cp.stderr).strip()
+        raise RuntimeError(stderr_text or f"ffprobe failed with code {cp.returncode}")
     result: dict[str, str] = {}
-    for line in cp.stdout.splitlines():
+    stdout_text = decode_text_bytes(cp.stdout)
+    for line in stdout_text.splitlines():
         if "=" not in line:
             continue
         key, value = line.split("=", 1)

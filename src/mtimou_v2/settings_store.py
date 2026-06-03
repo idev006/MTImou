@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import locale
 from pathlib import Path
 import tempfile
 
 from mtimou_v2.app_state import CameraListItem, OperatorSettingsState, PasswordEntry
+from mtimou_v2.numeric_parsing import parse_float_text
 from mtimou_v2.registry import default_password_env_names, load_cameras, target_modes_summary
+from mtimou_v2.text_encoding import candidate_encodings, decode_text_bytes
 
 
 MAX_ENV_FILE_BYTES = 256 * 1024
@@ -32,32 +35,40 @@ def escape_batch_value(value: str) -> str:
 
 
 def parse_float_value(values: dict[str, str], key: str, default: float) -> float:
-    raw = values.get(key, "").strip()
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        return default
+    return parse_float_text(values.get(key, ""), default)
 
 
 @dataclass(slots=True)
 class SettingsDocument:
     lines: list[str]
     values: dict[str, str]
+    encoding: str = "ascii"
 
 
 class BatchEnvSettingsStore:
     def __init__(self, env_path: Path) -> None:
         self.env_path = env_path
 
-    def _write_lines_atomic(self, lines: list[str]) -> None:
+    def _resolve_output_encoding(self, payload: str, requested_encoding: str) -> str:
+        for candidate in [requested_encoding, locale.getpreferredencoding(False), "utf-8-sig", "utf-8", "ascii"]:
+            encoding = (candidate or "").strip()
+            if not encoding:
+                continue
+            try:
+                payload.encode(encoding)
+                return encoding
+            except UnicodeEncodeError:
+                continue
+        return "utf-8"
+
+    def _write_lines_atomic(self, lines: list[str], *, encoding: str) -> None:
         payload = "\r\n".join(lines)
         if payload:
             payload += "\r\n"
+        output_encoding = self._resolve_output_encoding(payload, encoding)
         fd, temp_path = tempfile.mkstemp(prefix=self.env_path.name + ".", suffix=".tmp", dir=str(self.env_path.parent))
         try:
-            with open(fd, "w", encoding="ascii", newline="") as handle:
+            with open(fd, "w", encoding=output_encoding, newline="") as handle:
                 handle.write(payload)
             Path(temp_path).replace(self.env_path)
         finally:
@@ -65,42 +76,52 @@ class BatchEnvSettingsStore:
             if temp_file.exists():
                 temp_file.unlink()
 
+    def _decode_document_bytes(self, payload: bytes) -> tuple[str, str]:
+        for encoding in candidate_encodings():
+            try:
+                return payload.decode(encoding), encoding
+            except UnicodeDecodeError:
+                continue
+        return decode_text_bytes(payload), "utf-8"
+
     def load_document(self) -> SettingsDocument:
         lines: list[str] = []
         values: dict[str, str] = {}
+        source_encoding = "ascii"
         if self.env_path.exists():
             original_size = self.env_path.stat().st_size
             needs_compaction = original_size > MAX_ENV_FILE_BYTES
             previous_blank = False
-            with self.env_path.open("r", encoding="ascii", errors="ignore") as handle:
-                for raw_line in handle:
-                    line = raw_line.rstrip("\r\n")
-                    stripped = line.strip()
-                    if not stripped:
-                        # Keep at most a single separator blank line in memory, and
-                        # never allow pathological blank-line growth to bloat the file
-                        # on the next save.
-                        if lines and not previous_blank:
-                            lines.append("")
-                        elif previous_blank:
-                            needs_compaction = True
-                        previous_blank = True
-                        continue
-                    previous_blank = False
-                    lines.append(line)
-                    if stripped.lower().startswith("set ") and "=" in stripped:
-                        payload = stripped[4:]
-                        if payload.startswith('"') and payload.endswith('"'):
-                            payload = payload[1:-1]
-                        key, value = payload.split("=", 1)
-                        values[key.strip()] = unescape_batch_value(value.strip())
+            raw_payload = self.env_path.read_bytes()
+            decoded_text, source_encoding = self._decode_document_bytes(raw_payload)
+            for raw_line in decoded_text.splitlines():
+                line = raw_line.rstrip("\r\n")
+                stripped = line.strip()
+                if not stripped:
+                    # Keep at most a single separator blank line in memory, and
+                    # never allow pathological blank-line growth to bloat the file
+                    # on the next save.
+                    if lines and not previous_blank:
+                        lines.append("")
+                    elif previous_blank:
+                        needs_compaction = True
+                    previous_blank = True
+                    continue
+                previous_blank = False
+                lines.append(line)
+                if stripped.lower().startswith("set ") and "=" in stripped:
+                    payload = stripped[4:]
+                    if payload.startswith('"') and payload.endswith('"'):
+                        payload = payload[1:-1]
+                    key, value = payload.split("=", 1)
+                    values[key.strip()] = unescape_batch_value(value.strip())
             if lines and not lines[-1].strip():
                 while lines and not lines[-1].strip():
                     lines.pop()
                 needs_compaction = True
             if needs_compaction:
-                self._write_lines_atomic(lines)
-        return SettingsDocument(lines=lines, values=values)
+                self._write_lines_atomic(lines, encoding=source_encoding)
+        return SettingsDocument(lines=lines, values=values, encoding=source_encoding)
 
     def save_document(self, document: SettingsDocument, updates: dict[str, str]) -> SettingsDocument:
         remaining = dict(updates)
@@ -124,7 +145,7 @@ class BatchEnvSettingsStore:
                 new_lines.append(f'set "{key}={escape_batch_value(value)}"')
         while new_lines and not new_lines[-1].strip():
             new_lines.pop()
-        self._write_lines_atomic(new_lines)
+        self._write_lines_atomic(new_lines, encoding=document.encoding)
         return self.load_document()
 
     def load_state(self) -> tuple[SettingsDocument, OperatorSettingsState]:

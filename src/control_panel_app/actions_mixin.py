@@ -14,6 +14,7 @@ from mtimou_v2.settings_store import (
     DEFAULT_SINGLE_OVERLAY_SMALL_SCALE,
     DEFAULT_SINGLE_OVERLAY_TITLE_SCALE,
 )
+from mtimou_v2.text_encoding import decode_text_bytes
 
 
 class ControlPanelActionsMixin:
@@ -436,13 +437,13 @@ class ControlPanelActionsMixin:
     def _read_source_stdout(self) -> None:
         if self.source_process is None:
             return
-        text = bytes(self.source_process.readAllStandardOutput()).decode(errors="ignore")
+        text = decode_text_bytes(bytes(self.source_process.readAllStandardOutput()))
         self.append_output(text)
 
     def _read_source_stderr(self) -> None:
         if self.source_process is None:
             return
-        text = bytes(self.source_process.readAllStandardError()).decode(errors="ignore")
+        text = decode_text_bytes(bytes(self.source_process.readAllStandardError()))
         self.append_output(text)
 
     def _source_finished(self, exit_code: int) -> None:
@@ -543,13 +544,13 @@ class ControlPanelActionsMixin:
     def _read_health_stdout(self) -> None:
         if self.health_process is None:
             return
-        text = bytes(self.health_process.readAllStandardOutput()).decode(errors="ignore")
+        text = decode_text_bytes(bytes(self.health_process.readAllStandardOutput()))
         self.append_output(text)
 
     def _read_health_stderr(self) -> None:
         if self.health_process is None:
             return
-        text = bytes(self.health_process.readAllStandardError()).decode(errors="ignore")
+        text = decode_text_bytes(bytes(self.health_process.readAllStandardError()))
         self.append_output(text)
 
     def _health_finished(self, exit_code: int) -> None:

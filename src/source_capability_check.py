@@ -9,6 +9,7 @@ if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
 from mtimou_v2.source_capability import run_source_capability_check
+from mtimou_v2.numeric_parsing import parse_env_float
 from venv_guard import enforce_venv_python
 
 
@@ -19,7 +20,7 @@ def main() -> int:
     enforce_venv_python()
     camera_ids = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
     mode = os.getenv("IMOU_SOURCE_CAPABILITY_MODE", "public")
-    duration_sec = float(os.getenv("IMOU_SOURCE_CAPABILITY_DURATION_SEC", "10"))
+    duration_sec = parse_env_float("IMOU_SOURCE_CAPABILITY_DURATION_SEC", 10.0)
     log_path = Path(
         os.getenv(
             "IMOU_SOURCE_CAPABILITY_LOG_PATH",

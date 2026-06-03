@@ -16,11 +16,13 @@ class OperatorServices:
         cmd = ["cmd.exe", "/c", str(self.root_dir / batch_name)]
         if args:
             cmd.extend(args)
-        subprocess.Popen(cmd, cwd=str(self.root_dir), creationflags=CREATE_NEW_CONSOLE)
+        process_env = dict(os.environ)
+        process_env["PYTHONUTF8"] = "1"
+        process_env["PYTHONIOENCODING"] = "utf-8"
+        subprocess.Popen(cmd, cwd=str(self.root_dir), env=process_env, creationflags=CREATE_NEW_CONSOLE)
 
     def open_logs_folder(self) -> None:
         os.startfile(str(self.root_dir / "logs"))
 
     def open_readme(self) -> None:
         os.startfile(str(self.root_dir / "README.md"))
-
