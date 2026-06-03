@@ -78,6 +78,15 @@ class ControlPanelActionsMixin:
     def copy_selected_stream_urls(self) -> None:
         self._copy_selected_stream_urls(description="stream URLs")
 
+    def copy_selected_lan_stream_urls(self) -> None:
+        self._copy_selected_stream_urls(mode_filter="lan", description="LAN RTSP URLs")
+
+    def copy_selected_public_main_stream_urls(self) -> None:
+        self._copy_selected_stream_urls(mode_filter="public", subtype_override="0", description="public main-stream RTSP URLs")
+
+    def copy_selected_ddns_main_stream_urls(self) -> None:
+        self._copy_selected_stream_urls(mode_filter="ddns", subtype_override="0", description="DDNS main-stream RTSP URLs")
+
     def copy_selected_public_substream_urls(self) -> None:
         self._copy_selected_stream_urls(mode_filter="public", subtype_override="1", description="public substream RTSP URLs")
 
