@@ -204,6 +204,7 @@ Use `VERSION` as the simplest shared answer to:
 ## 10. Where To Read Next
 
 - [`README.md`](F:\programming\python\MTImou\README.md)
+- [`docs/developer-handoff-checklist.md`](F:\programming\python\MTImou\docs\developer-handoff-checklist.md)
 - [`docs/22-n-camera-architecture.md`](F:\programming\python\MTImou\docs\22-n-camera-architecture.md)
 - [`docs/20-ui-mvvm-ssot-architecture.md`](F:\programming\python\MTImou\docs\20-ui-mvvm-ssot-architecture.md)
 - [`docs/multi-camera-runbook.md`](F:\programming\python\MTImou\docs\multi-camera-runbook.md)
