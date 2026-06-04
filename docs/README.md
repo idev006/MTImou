@@ -7,6 +7,7 @@ Current operator-facing entrypoints:
 - [../README.md](../README.md)
 - [multi-camera-runbook.md](./multi-camera-runbook.md)
 - [developer-handoff-checklist.md](./developer-handoff-checklist.md)
+- [developer-handoff-message.md](./developer-handoff-message.md)
 
 ## Document Index
 
@@ -35,8 +36,9 @@ Current operator-facing entrypoints:
 23. [22-n-camera-architecture.md](./22-n-camera-architecture.md)
 24. [23-developer-architecture-map.md](./23-developer-architecture-map.md)
 25. [developer-handoff-checklist.md](./developer-handoff-checklist.md)
-26. [multi-camera-runbook.md](./multi-camera-runbook.md)
-27. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
+26. [developer-handoff-message.md](./developer-handoff-message.md)
+27. [multi-camera-runbook.md](./multi-camera-runbook.md)
+28. [adr/ADR-001-p2p-unofficial-wrapper.md](./adr/ADR-001-p2p-unofficial-wrapper.md)
 
 ## Working Model
 
