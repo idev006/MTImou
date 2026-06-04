@@ -136,6 +136,143 @@ cd /d F:\programming\python\MTImou
 run_resilience_smoke.bat cam1 cam2
 ```
 
+## Architecture Overview
+
+This repository has four production layers:
+
+1. `run_*.bat` launchers
+   - operator and developer entrypoints
+   - set Windows-local runtime defaults
+   - always route execution into the project `.venv`
+2. `src/control_panel_app`
+   - PySide6 operator UI
+   - layout, controls, dialogs, and safety guards
+3. `src/mtimou_v2`
+   - camera registry, target picking, RTSP URL building, runtime failover, persistence, and viewmodels
+4. local configuration files
+   - `camera.env.bat` for machine-local settings and secrets
+   - `cameras.json` for camera inventory and topology
+   - `camera_presets.json` for saved operator selections
+
+High-level flow:
+
+- operator changes settings in the control panel
+- UI state flows through `src/mtimou_v2/viewmodels/control_panel_vm.py`
+- settings stores save to `camera.env.bat`, `cameras.json`, and `camera_presets.json`
+- launchers and viewer scripts load those settings and open RTSP streams through the runtime modules
+
+## Files You Should Know
+
+- `README.md`
+  - operator and developer overview
+- `DEVELOPER_GUIDE.md`
+  - shortest path for a new engineer
+- `VERSION`
+  - current handoff/release baseline for this repo
+- `CHANGELOG.md`
+  - recent significant behavior and workflow changes
+- `src/control_panel_app/window.py`
+  - tab layout and responsive control-panel composition
+- `src/control_panel_app/actions_mixin.py`
+  - button behavior, dialogs, launches, and diagnostics
+- `src/control_panel_app/state_mixin.py`
+  - data refresh, filters, metrics, and table state
+- `src/mtimou_v2/viewer_common.py`
+  - stream-state creation, reconnects, and effective subtype selection
+- `src/mtimou_v2/settings_store.py`
+  - compact, atomic, encoding-safe `camera.env.bat` persistence
+
+## Local-Only Files
+
+These files are expected to differ per machine or site and should not carry real secrets into git:
+
+- `camera.env.bat`
+- `camera_presets.json`
+- any generated files under `logs/`
+
+Safe tracked templates and references:
+
+- `camera.env.bat.example`
+- `camera_presets.example.json`
+- `cameras.example.json`
+
+Recommended rule:
+
+- commit templates, docs, and code
+- do not commit live passwords, live local presets, or machine-specific secrets
+
+## Verification Workflow
+
+For a new engineer, the normal confidence path is:
+
+1. environment check
+
+```bat
+cd /d F:\programming\python\MTImou
+run_doctor.bat
+```
+
+2. control-panel smoke audit
+
+```bat
+cd /d F:\programming\python\MTImou
+run_control_panel_smoke_audit.bat
+```
+
+3. manual UI run
+
+```bat
+cd /d F:\programming\python\MTImou
+run_control_panel.bat
+```
+
+4. if runtime or viewer behavior changed, run:
+
+```bat
+cd /d F:\programming\python\MTImou
+run_system_health_check.bat
+run_source_capability_check.bat cam1 cam2
+run_performance_benchmark.bat cam1 cam2
+```
+
+Recommended interpretation:
+
+- `run_doctor.bat`
+  - repo/runtime sanity
+- `run_control_panel_smoke_audit.bat`
+  - UI control/action sanity
+- `run_system_health_check.bat`
+  - target and environment sanity
+- `run_source_capability_check.bat`
+  - camera-side FPS/stream ceiling
+- `run_performance_benchmark.bat`
+  - viewer/runtime throughput comparison
+
+## Handoff Notes For New Engineers
+
+When you are new to this repo, read in this order:
+
+1. `README.md`
+2. `DEVELOPER_GUIDE.md`
+3. `docs/20-ui-mvvm-ssot-architecture.md`
+4. `docs/22-n-camera-architecture.md`
+5. `docs/multi-camera-runbook.md`
+
+Then follow this sequence:
+
+1. run `setup_windows.bat`
+2. run `run_doctor.bat`
+3. run `run_control_panel_smoke_audit.bat`
+4. open `run_control_panel.bat`
+5. only then start changing behavior
+
+If you change important behavior, update all of:
+
+- `README.md`
+- `DEVELOPER_GUIDE.md`
+- `CHANGELOG.md`
+- relevant docs under `docs/`
+
 ## Mode Selection
 
 Supported values:

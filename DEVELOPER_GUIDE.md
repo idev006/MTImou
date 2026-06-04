@@ -133,8 +133,50 @@ Do not add new production behavior into `legacy`. Use it only for historical ref
 5. If UI behavior changed:
    - open `run_control_panel.bat`
    - exercise the changed workflow manually
+6. Before handing work to the next engineer:
+   - update `CHANGELOG.md`
+   - verify `VERSION`
+   - note any secret/local-only expectations
 
-## 6. Safety Rules
+## 6. How The Pieces Fit Together
+
+Configuration and runtime flow:
+
+1. `camera.env.bat`, `cameras.json`, and `camera_presets.json` define local operator state
+2. `src/mtimou_v2/settings_store.py`, `camera_config_store.py`, and `preset_store.py` persist those files safely
+3. `src/mtimou_v2/viewmodels/control_panel_vm.py` bridges persistence and UI actions
+4. `src/control_panel_app/window.py`, `state_mixin.py`, and `actions_mixin.py` expose that behavior in the PySide6 control panel
+5. launchers such as `run_control_panel.bat`, `run_camera_stable.bat`, and `run_multi_camera_stable.bat` pass execution into the runtime using the project `.venv`
+6. viewer/runtime modules under `src/mtimou_v2` choose the target, build the RTSP URL, and handle reconnect/failover
+
+Rule of thumb:
+
+- UI or workflow change -> look in `src/control_panel_app`
+- persistence/config change -> look in `src/mtimou_v2/*store.py`
+- target selection / RTSP / reconnect change -> look in `src/mtimou_v2/targets.py`, `rtsp.py`, and `viewer_common.py`
+- launcher/runtime bootstrap change -> look at root `run_*.bat`
+
+## 7. Local Files And Secrets
+
+Treat these as machine-local unless you intentionally replace their starter templates:
+
+- `camera.env.bat`
+- `camera_presets.json`
+- files under `logs/`
+
+Safe tracked references:
+
+- `camera.env.bat.example`
+- `camera_presets.example.json`
+- `cameras.example.json`
+
+Never commit:
+
+- live passwords
+- site-specific secret values
+- machine-only presets that are not meant to become shared defaults
+
+## 8. Safety Rules
 
 - Always use `.venv\Scripts\python.exe`
 - Prefer editing production code under `src/mtimou_v2` and `src/control_panel_app`
@@ -145,7 +187,21 @@ Do not add new production behavior into `legacy`. Use it only for historical ref
   - preset execution by stored camera ids
   - atomic env-file writes
 
-## 7. Where To Read Next
+## 9. Release And Handoff Discipline
+
+When you finish a meaningful change:
+
+1. verify behavior
+2. update docs affected by the change
+3. add a short entry to `CHANGELOG.md`
+4. bump `VERSION` only when you intentionally want a new baseline tag for handoff or release
+
+Use `VERSION` as the simplest shared answer to:
+
+- what baseline is this repo on?
+- which changelog section should the next engineer read first?
+
+## 10. Where To Read Next
 
 - [`README.md`](F:\programming\python\MTImou\README.md)
 - [`docs/22-n-camera-architecture.md`](F:\programming\python\MTImou\docs\22-n-camera-architecture.md)
